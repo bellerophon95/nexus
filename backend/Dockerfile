@@ -1,3 +1,4 @@
+# Nexus Backend v1.1.2 - Optimized Metal Build
 FROM python:3.11-slim
 
 WORKDIR /app
