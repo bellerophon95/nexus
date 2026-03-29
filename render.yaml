@@ -52,7 +52,7 @@
       - key: NEXT_PUBLIC_API_URL
         fromService:
           type:  web 
-          name: nexus-backend
+           name: nexus-backend
           property:host
-      - key: NODE_ENV
+       - key: NODE_ENV
         value: production
