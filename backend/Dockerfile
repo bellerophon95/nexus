@@ -1,4 +1,4 @@
-# Nexus Backend v1.2.2 - Root Build Context
+# Nexus Backend v1.2.3 - Preserve Package Structure
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -19,9 +19,10 @@ RUN pip install --no-cache-dir numpy==1.26.4
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend application code
-COPY backend/ .
+# Copy backend as a package under /app/backend/ to preserve import paths
+# Local code uses: from backend.api import ..., from backend.config import ...
+COPY backend/ ./backend/
 
 # Expose port and start application
 EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
