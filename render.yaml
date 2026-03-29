@@ -51,7 +51,7 @@
     envVars:
       - key: NEXT_PUBLIC_API_URL
         fromService:
-          type: web
+          type:  web 
           name: nexus-backend
           property:host
       - key: NODE_ENV
