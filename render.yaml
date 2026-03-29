@@ -50,9 +50,9 @@
     startCommand: cd frontend && npm run start
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromServi                   
-        
-        
-        type:  we                     name: nexus-backend          property: host
-       - key: NODE_ENV
-        value: production
+        fromService:
+                  type: web
+                            name: nexus-backend
+                                      property: host
+                                            - key: NODE_ENV
+                                                    value: production
