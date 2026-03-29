@@ -53,7 +53,7 @@ services:
     env: node
     plan: starter
     region: ohio
-    rootDirectory: frontend
+    rootDir: frontend
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
