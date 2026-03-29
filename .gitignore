@@ -36,3 +36,4 @@ local_data/
 .idea/
 .vscode/
 .DS_Store
+.vercel
