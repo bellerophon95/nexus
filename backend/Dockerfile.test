@@ -1,19 +1,21 @@
 FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-
-# Set working directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
-    libpq-dev \
     git \
+    libmagic1 \
+    poppler-utils \
+    tesseract-ocr \
+    libreoffice \
+    pandoc \
     && rm -rf /var/lib/apt/lists/*
+
+# Install numpy first to satisfy build-time dependencies of other packages (e.g., scikit-network)
+RUN pip install --no-cache-dir numpy==1.26.4
 
 # Install python dependencies
 COPY requirements.txt .
@@ -22,12 +24,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose port
+# Expose port and start application
 EXPOSE 8000
-
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8000/api/health || exit 1
-
-# Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
