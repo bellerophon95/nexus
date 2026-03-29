@@ -52,17 +52,17 @@ services:
     name: nexus-frontend
     env: node
     plan: starter
-    region: ohio
+      region: ohio
     rootDir: frontend
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
-      - key: NEXT_PUBLIC_API_URL
+        - key: NEXT_PUBLIC_API_URL
         fromService:
           type: web
           name: nexus-backend
-    property: host
-      - key: NODE_VERSION
+                      property: host
+          - key: NODE_VERSION
         value: 20
       - key: NODE_ENV
         value: production
