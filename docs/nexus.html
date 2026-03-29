@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project NEXUS — Multi-Agent Research Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #111118;
+    --bg-card: #16161f;
+    --bg-card-hover: #1c1c28;
+    --border: #2a2a3a;
+    --border-accent: #3d3d55;
+    --text-primary: #e8e8f0;
+    --text-secondary: #9898b0;
+    --text-muted: #6a6a82;
+    --accent-cyan: #00d4ff;
+    --accent-cyan-dim: #00d4ff20;
+    --accent-violet: #8b5cf6;
+    --accent-violet-dim: #8b5cf620;
+    --accent-emerald: #10b981;
+    --accent-emerald-dim: #10b98120;
+    --accent-amber: #f59e0b;
+    --accent-amber-dim: #f59e0b20;
+    --accent-rose: #f43f5e;
+    --accent-rose-dim: #f43f5e20;
+    --accent-blue: #3b82f6;
+    --accent-blue-dim: #3b82f620;
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --font-body: 'DM Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ── Noise texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 10vw;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -40%;
+    right: -20%;
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, var(--accent-cyan-dim) 0%, transparent 70%);
+    filter: blur(100px);
+    animation: drift 20s ease-in-out infinite alternate;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -10%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, var(--accent-violet-dim) 0%, transparent 70%);
+    filter: blur(80px);
+    animation: drift 15s ease-in-out infinite alternate-reverse;
+  }
+
+  @keyframes drift {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(40px, -30px) scale(1.1); }
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+    background: var(--accent-cyan-dim);
+    margin-bottom: 32px;
+    width: fit-content;
+    animation: fadeUp 0.8s ease-out both;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(3.5rem, 8vw, 7rem);
+    line-height: 1.05;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    animation: fadeUp 0.8s ease-out 0.15s both;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    font-size: 1.15rem;
+    color: var(--text-secondary);
+    max-width: 680px;
+    margin-top: 28px;
+    line-height: 1.8;
+    animation: fadeUp 0.8s ease-out 0.3s both;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 36px;
+    animation: fadeUp 0.8s ease-out 0.45s both;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-tag {
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    background: var(--bg-secondary);
+    transition: all 0.3s ease;
+  }
+
+  .hero-tag:hover {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: var(--accent-cyan-dim);
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  section {
+    padding: 100px 0;
+    position: relative;
+  }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 400;
+    line-height: 1.2;
+    margin-bottom: 20px;
+  }
+
+  .section-desc {
+    color: var(--text-secondary);
+    max-width: 640px;
+    font-size: 1.02rem;
+    margin-bottom: 48px;
+    line-height: 1.8;
+  }
+
+  /* ── Dividers ── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0;
+  }
+
+  /* ── Overview Grid ── */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .overview-cell {
+    background: var(--bg-card);
+    padding: 32px;
+    transition: background 0.3s ease;
+  }
+
+  .overview-cell:hover {
+    background: var(--bg-card-hover);
+  }
+
+  .overview-cell .cell-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+  }
+
+  .overview-cell h3 {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .overview-cell p {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    line-height: 1.7;
+  }
+
+  /* ── Architecture Diagram ── */
+  .arch-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px;
+    overflow-x: auto;
+  }
+
+  .arch-svg {
+    width: 100%;
+    min-width: 900px;
+    height: auto;
+  }
+
+  /* ── Component Deep-Dive Cards ── */
+  .component-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 36px;
+    margin-bottom: 24px;
+    transition: border-color 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .component-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+  }
+
+  .component-card:hover {
+    border-color: var(--border-accent);
+  }
+
+  .component-card .card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .card-number {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    min-width: 32px;
+    padding-top: 4px;
+  }
+
+  .card-title {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 400;
+    line-height: 1.3;
+  }
+
+  .card-body {
+    padding-left: 48px;
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    line-height: 1.8;
+  }
+
+  .card-body ul {
+    list-style: none;
+    padding: 0;
+    margin-top: 16px;
+  }
+
+  .card-body li {
+    padding: 6px 0;
+    padding-left: 20px;
+    position: relative;
+  }
+
+  .card-body li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--text-muted);
+    font-size: 0.8em;
+  }
+
+  /* ── Code blocks ── */
+  .code-block {
+    background: #0d0d14;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 20px 0;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    position: relative;
+  }
+
+  .code-block .code-label {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--bg-card);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .code-block .kw { color: var(--accent-violet); }
+  .code-block .fn { color: var(--accent-cyan); }
+  .code-block .str { color: var(--accent-emerald); }
+  .code-block .cmt { color: var(--text-muted); font-style: italic; }
+  .code-block .type { color: var(--accent-amber); }
+  .code-block .num { color: var(--accent-rose); }
+
+  /* ── Tech Stack ── */
+  .stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  .stack-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: all 0.3s ease;
+  }
+
+  .stack-item:hover {
+    border-color: var(--border-accent);
+    transform: translateY(-2px);
+  }
+
+  .stack-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+
+  .stack-info h4 {
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .stack-info span {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  /* ── Deployment Cost Table ── */
+  .cost-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 24px;
+    font-size: 0.88rem;
+  }
+
+  .cost-table th {
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .cost-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #1a1a26;
+    color: var(--text-secondary);
+  }
+
+  .cost-table tr:hover td {
+    background: var(--bg-card);
+  }
+
+  .cost-table .cost-val {
+    font-family: var(--font-mono);
+    color: var(--accent-emerald);
+    font-weight: 600;
+  }
+
+  .cost-total {
+    font-weight: 700;
+    color: var(--text-primary) !important;
+  }
+
+  .cost-total .cost-val {
+    color: var(--accent-amber) !important;
+    font-size: 1rem;
+  }
+
+  /* ── Eval metrics ── */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+  }
+
+  .metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .metric-val {
+    font-family: var(--font-mono);
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .metric-label {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Flow diagram (CSS) ── */
+  .flow-steps {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+    overflow-x: auto;
+    padding: 16px 0;
+  }
+
+  .flow-step {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    min-width: 180px;
+    flex-shrink: 0;
+    position: relative;
+    text-align: center;
+  }
+
+  .flow-step h4 {
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .flow-step span {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    padding: 0 6px;
+    flex-shrink: 0;
+  }
+
+  /* ── Two-col layout ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 768px) {
+    .two-col { grid-template-columns: 1fr; }
+    .hero { padding: 60px 6vw; }
+    .arch-container { padding: 24px; }
+    .container { padding: 0 20px; }
+    .card-body { padding-left: 0; }
+  }
+
+  /* ── Accent colors for component cards ── */
+  .accent-cyan::before { background: linear-gradient(90deg, var(--accent-cyan), transparent); }
+  .accent-violet::before { background: linear-gradient(90deg, var(--accent-violet), transparent); }
+  .accent-emerald::before { background: linear-gradient(90deg, var(--accent-emerald), transparent); }
+  .accent-amber::before { background: linear-gradient(90deg, var(--accent-amber), transparent); }
+  .accent-rose::before { background: linear-gradient(90deg, var(--accent-rose), transparent); }
+  .accent-blue::before { background: linear-gradient(90deg, var(--accent-blue), transparent); }
+
+  /* ── Footer ── */
+  footer {
+    padding: 60px 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+  }
+
+  footer a {
+    color: var(--accent-cyan);
+    text-decoration: none;
+  }
+
+  /* ── Nav ── */
+  .nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 16px 10vw;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(10, 10, 15, 0.8);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.3s ease;
+  }
+
+  .nav.scrolled {
+    border-bottom-color: var(--border);
+  }
+
+  .nav-logo {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.15em;
+    color: var(--accent-cyan);
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 28px;
+    list-style: none;
+  }
+
+  .nav-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    transition: color 0.3s;
+  }
+
+  .nav-links a:hover {
+    color: var(--text-primary);
+  }
+
+  /* ── Inline tag ── */
+  .il {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 1px 7px;
+    border-radius: 4px;
+    color: var(--accent-cyan);
+    white-space: nowrap;
+  }
+
+  /* ── Subsections ── */
+  .sub-heading {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    margin-top: 32px;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+  }
+
+  /* ── GitHub link button ── */
+  .gh-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 28px;
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    border-radius: 8px;
+    text-decoration: none;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-top: 36px;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+  }
+
+  .gh-button:hover {
+    background: var(--accent-cyan);
+    transform: translateY(-2px);
+  }
+
+  /* ── Pipeline visual ── */
+  .pipeline-visual {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin: 24px 0;
+  }
+
+  .pipeline-layer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    padding: 12px 16px;
+    border-left: 2px solid var(--border);
+    transition: border-color 0.3s;
+  }
+
+  .pipeline-layer:hover {
+    border-left-color: var(--accent-cyan);
+  }
+
+  .pipeline-layer .pl-name {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    min-width: 140px;
+    color: var(--text-primary);
+  }
+
+  .pipeline-layer .pl-tech {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+  }
+
+  .pipeline-layer .pl-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-secondary);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-left: auto;
+    max-width: 200px;
+  }
+
+  .pipeline-layer .pl-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s ease;
+  }
+</style>
+</head>
+<body>
+
+<!-- ────────── NAV ────────── -->
+<nav class="nav" id="nav">
+  <div class="nav-logo">NEXUS</div>
+  <ul class="nav-links">
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#components">Components</a></li>
+    <li><a href="#stack">Stack</a></li>
+    <li><a href="#deployment">Deployment</a></li>
+    <li><a href="https://github.com/bellerophon95" target="_blank">GitHub ↗</a></li>
+  </ul>
+</nav>
+
+<!-- ────────── HERO ────────── -->
+<header class="hero">
+  <div class="hero-badge">Applied AI · Production-Grade · 2026</div>
+  <h1>Project <em>NEXUS</em></h1>
+  <p class="hero-sub">
+    A production-ready multi-agent research intelligence platform featuring adaptive RAG, 
+    hybrid retrieval with cross-encoder reranking, LangGraph orchestration, Self-RAG validation, 
+    comprehensive evaluation pipelines, guardrails, and full observability — all deployed on a 
+    zero-to-low-cost serverless stack.
+  </p>
+  <div class="hero-tags">
+    <span class="hero-tag">Multi-Agent · LangGraph</span>
+    <span class="hero-tag">Adaptive RAG</span>
+    <span class="hero-tag">Hybrid Search</span>
+    <span class="hero-tag">Cross-Encoder Reranking</span>
+    <span class="hero-tag">Self-RAG Validation</span>
+    <span class="hero-tag">Semantic Chunking</span>
+    <span class="hero-tag">Guardrails</span>
+    <span class="hero-tag">RAGAS Evals</span>
+    <span class="hero-tag">Langfuse Observability</span>
+    <span class="hero-tag">MCP Protocol</span>
+    <span class="hero-tag">Streaming</span>
+    <span class="hero-tag">Semantic Cache</span>
+  </div>
+  <a href="#architecture" class="gh-button">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    Explore Architecture
+  </a>
+</header>
+
+<hr class="divider">
+
+<!-- ────────── OVERVIEW ────────── -->
+<section id="overview">
+  <div class="container">
+    <p class="section-label">01 — Overview</p>
+    <h2 class="section-title">What NEXUS Does</h2>
+    <p class="section-desc">
+      NEXUS is a domain-agnostic research intelligence platform that ingests heterogeneous documents, 
+      builds a semantically-rich knowledge base, and answers complex multi-hop questions through 
+      coordinated specialist agents. It is designed to demonstrate every layer of a production AI system — 
+      from chunking strategy to deployment observability.
+    </p>
+
+    <div class="overview-grid">
+      <div class="overview-cell">
+        <div class="cell-icon" style="background: var(--accent-cyan-dim); color: var(--accent-cyan);">⚡</div>
+        <h3>Adaptive Query Routing</h3>
+        <p>A query complexity classifier dynamically routes between direct LLM response, single-step RAG, and multi-hop agentic retrieval — reducing cost by up to 4× on simple queries.</p>
+      </div>
+      <div class="overview-cell">
+        <div class="cell-icon" style="background: var(--accent-violet-dim); color: var(--accent-violet);">🔀</div>
+        <h3>Multi-Agent Orchestration</h3>
+        <p>A LangGraph supervisor coordinates specialist agents (Researcher, Analyst, Validator) through a stateful directed graph with conditional edges, human-in-the-loop checkpoints, and cycle-based reflection.</p>
+      </div>
+      <div class="overview-cell">
+        <div class="cell-icon" style="background: var(--accent-emerald-dim); color: var(--accent-emerald);">🔍</div>
+        <h3>Hybrid Retrieval Pipeline</h3>
+        <p>Dense vector search (sentence-transformers) + sparse BM25 via reciprocal rank fusion, followed by cross-encoder reranking and Self-RAG relevance gating before generation.</p>
+      </div>
+      <div class="overview-cell">
+        <div class="cell-icon" style="background: var(--accent-amber-dim); color: var(--accent-amber);">📊</div>
+        <h3>Evaluation & Evals</h3>
+        <p>RAGAS framework with faithfulness, answer relevance, context precision/recall metrics. LLM-as-Judge scoring. Automated regression testing on golden datasets before every deploy.</p>
+      </div>
+      <div class="overview-cell">
+        <div class="cell-icon" style="background: var(--accent-rose-dim); color: var(--accent-rose);">🛡️</div>
+        <h3>Guardrails & Safety</h3>
+        <p>Multi-layer defense: input PII anonymization (Presidio), prompt injection detection (LLM Guard), output hallucination scoring, topic restriction, and toxicity filtering.</p>
+      </div>
+      <div class="overview-cell">
+        <div class="cell-icon" style="background: var(--accent-blue-dim); color: var(--accent-blue);">📡</div>
+        <h3>Full Observability Stack</h3>
+        <p>Langfuse traces every agent step, tool call, retrieval, and LLM invocation. Cost tracking, latency budgets, quality dashboards, and automated alerts on drift detection.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ────────── ARCHITECTURE ────────── -->
+<section id="architecture">
+  <div class="container">
+    <p class="section-label">02 — System Architecture</p>
+    <h2 class="section-title">End-to-End Architecture</h2>
+    <p class="section-desc">
+      The system is composed of five primary layers: Ingestion, Retrieval, Agent Orchestration, 
+      Generation with Guardrails, and Observability. Each layer is independently testable, 
+      observable, and replaceable.
+    </p>
+
+    <div class="arch-container">
+      <svg class="arch-svg" viewBox="0 0 1100 820" xmlns="http://www.w3.org/2000/svg" fill="none">
+        <!-- Background grid -->
+        <defs>
+          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1a1a2a" stroke-width="0.5"/>
+          </pattern>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+          </filter>
+          <linearGradient id="cyanGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <rect width="1100" height="820" fill="url(#grid)" rx="12"/>
+
+        <!-- LAYER LABELS -->
+        <text x="20" y="36" fill="#6a6a82" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="2">LAYER 1 · INGESTION</text>
+        <text x="20" y="216" fill="#6a6a82" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="2">LAYER 2 · RETRIEVAL</text>
+        <text x="20" y="396" fill="#6a6a82" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="2">LAYER 3 · AGENT ORCHESTRATION</text>
+        <text x="20" y="576" fill="#6a6a82" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="2">LAYER 4 · GENERATION + GUARDRAILS</text>
+        <text x="20" y="736" fill="#6a6a82" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="2">LAYER 5 · OBSERVABILITY + EVALS</text>
+
+        <!-- ── LAYER 1: INGESTION ── -->
+        <!-- Sources -->
+        <rect x="40" y="52" width="120" height="50" rx="8" fill="#16161f" stroke="#2a2a3a"/>
+        <text x="100" y="74" text-anchor="middle" fill="#9898b0" font-family="DM Sans" font-size="10" font-weight="600">PDF / DOCX</text>
+        <text x="100" y="90" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">unstructured.io</text>
+
+        <rect x="180" y="52" width="120" height="50" rx="8" fill="#16161f" stroke="#2a2a3a"/>
+        <text x="240" y="74" text-anchor="middle" fill="#9898b0" font-family="DM Sans" font-size="10" font-weight="600">Web / HTML</text>
+        <text x="240" y="90" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">firecrawl / jina</text>
+
+        <rect x="320" y="52" width="120" height="50" rx="8" fill="#16161f" stroke="#2a2a3a"/>
+        <text x="380" y="74" text-anchor="middle" fill="#9898b0" font-family="DM Sans" font-size="10" font-weight="600">API / JSON</text>
+        <text x="380" y="90" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">MCP connectors</text>
+
+        <!-- Arrows down -->
+        <line x1="100" y1="102" x2="100" y2="122" stroke="#3d3d55" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+        <line x1="240" y1="102" x2="240" y2="122" stroke="#3d3d55" stroke-width="1.5"/>
+        <line x1="380" y1="102" x2="380" y2="122" stroke="#3d3d55" stroke-width="1.5"/>
+
+        <!-- Processing Pipeline -->
+        <rect x="40" y="122" width="460" height="55" rx="8" fill="#16161f" stroke="#00d4ff" stroke-opacity="0.3" stroke-dasharray="4"/>
+        <text x="60" y="145" fill="#00d4ff" font-family="JetBrains Mono" font-size="9" font-weight="600">ENRICHMENT PIPELINE</text>
+        <text x="60" y="163" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">Parse → Clean → Semantic Chunk → Extract Metadata → Embed → Upsert</text>
+
+        <!-- Chunking strategy callout -->
+        <rect x="540" y="52" width="220" height="125" rx="8" fill="#16161f" stroke="#8b5cf6" stroke-opacity="0.3"/>
+        <text x="560" y="72" fill="#8b5cf6" font-family="JetBrains Mono" font-size="8" font-weight="600">CHUNKING STRATEGY</text>
+        <text x="560" y="92" fill="#9898b0" font-family="DM Sans" font-size="9">• Semantic chunking (cosine sim)</text>
+        <text x="560" y="108" fill="#9898b0" font-family="DM Sans" font-size="9">• Parent-child doc hierarchy</text>
+        <text x="560" y="124" fill="#9898b0" font-family="DM Sans" font-size="9">• Table-aware splitting</text>
+        <text x="560" y="140" fill="#9898b0" font-family="DM Sans" font-size="9">• Context window headers</text>
+        <text x="560" y="156" fill="#9898b0" font-family="DM Sans" font-size="9">• Overlap with boundary validation</text>
+
+        <!-- Embedding callout -->
+        <rect x="790" y="52" width="280" height="125" rx="8" fill="#16161f" stroke="#10b981" stroke-opacity="0.3"/>
+        <text x="810" y="72" fill="#10b981" font-family="JetBrains Mono" font-size="8" font-weight="600">EMBEDDING + STORAGE</text>
+        <text x="810" y="92" fill="#9898b0" font-family="DM Sans" font-size="9">• Dense: all-MiniLM-L6-v2 (384d)</text>
+        <text x="810" y="108" fill="#9898b0" font-family="DM Sans" font-size="9">• Sparse: BM25 via rank_bm25</text>
+        <text x="810" y="124" fill="#9898b0" font-family="DM Sans" font-size="9">• Vector DB: Qdrant (HNSW index)</text>
+        <text x="810" y="140" fill="#9898b0" font-family="DM Sans" font-size="9">• Metadata store: Supabase PG</text>
+        <text x="810" y="156" fill="#9898b0" font-family="DM Sans" font-size="9">• Dedup: SimHash fingerprinting</text>
+
+        <!-- ── LAYER 2: RETRIEVAL ── -->
+        <rect x="40" y="232" width="180" height="55" rx="8" fill="#16161f" stroke="#2a2a3a"/>
+        <text x="130" y="254" text-anchor="middle" fill="#00d4ff" font-family="JetBrains Mono" font-size="9" font-weight="600">QUERY PROCESSOR</text>
+        <text x="130" y="272" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">expand · decompose · HyDE</text>
+
+        <!-- Arrow -->
+        <line x1="220" y1="259" x2="250" y2="259" stroke="#3d3d55" stroke-width="1.5"/>
+
+        <rect x="250" y="232" width="170" height="55" rx="8" fill="#16161f" stroke="#2a2a3a"/>
+        <text x="335" y="254" text-anchor="middle" fill="#f59e0b" font-family="JetBrains Mono" font-size="9" font-weight="600">ADAPTIVE ROUTER</text>
+        <text x="335" y="272" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">classify complexity</text>
+
+        <!-- Three paths from router -->
+        <line x1="335" y1="287" x2="135" y2="310" stroke="#3d3d55" stroke-width="1"/>
+        <line x1="335" y1="287" x2="335" y2="310" stroke="#3d3d55" stroke-width="1"/>
+        <line x1="335" y1="287" x2="535" y2="310" stroke="#3d3d55" stroke-width="1"/>
+
+        <rect x="60" y="310" width="150" height="42" rx="6" fill="#10b98115" stroke="#10b981" stroke-opacity="0.4"/>
+        <text x="135" y="328" text-anchor="middle" fill="#10b981" font-family="JetBrains Mono" font-size="8" font-weight="600">DIRECT LLM</text>
+        <text x="135" y="342" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">simple queries</text>
+
+        <rect x="260" y="310" width="150" height="42" rx="6" fill="#00d4ff15" stroke="#00d4ff" stroke-opacity="0.4"/>
+        <text x="335" y="328" text-anchor="middle" fill="#00d4ff" font-family="JetBrains Mono" font-size="8" font-weight="600">SINGLE-STEP RAG</text>
+        <text x="335" y="342" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">factoid lookups</text>
+
+        <rect x="460" y="310" width="150" height="42" rx="6" fill="#8b5cf615" stroke="#8b5cf6" stroke-opacity="0.4"/>
+        <text x="535" y="328" text-anchor="middle" fill="#8b5cf6" font-family="JetBrains Mono" font-size="8" font-weight="600">AGENTIC MULTI-HOP</text>
+        <text x="535" y="342" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">complex reasoning</text>
+
+        <!-- Retrieval detail -->
+        <rect x="670" y="232" width="400" height="130" rx="8" fill="#16161f" stroke="#f59e0b" stroke-opacity="0.3"/>
+        <text x="690" y="252" fill="#f59e0b" font-family="JetBrains Mono" font-size="8" font-weight="600">HYBRID RETRIEVAL DETAIL</text>
+        <text x="690" y="274" fill="#9898b0" font-family="DM Sans" font-size="9">1. Dense search → Qdrant cosine sim (top-50)</text>
+        <text x="690" y="292" fill="#9898b0" font-family="DM Sans" font-size="9">2. Sparse search → BM25 keyword match (top-50)</text>
+        <text x="690" y="310" fill="#9898b0" font-family="DM Sans" font-size="9">3. Reciprocal Rank Fusion → merge (top-20)</text>
+        <text x="690" y="328" fill="#9898b0" font-family="DM Sans" font-size="9">4. Cross-encoder reranker → ms-marco-MiniLM (top-5)</text>
+        <text x="690" y="346" fill="#9898b0" font-family="DM Sans" font-size="9">5. Self-RAG gate → relevance ≥ 0.7 or re-retrieve</text>
+
+        <!-- ── LAYER 3: AGENT ORCHESTRATION ── -->
+        <rect x="40" y="412" width="1030" height="130" rx="10" fill="#16161f" stroke="#8b5cf6" stroke-opacity="0.2"/>
+
+        <!-- Supervisor -->
+        <rect x="70" y="430" width="160" height="90" rx="8" fill="#8b5cf615" stroke="#8b5cf6" stroke-opacity="0.4"/>
+        <text x="150" y="456" text-anchor="middle" fill="#8b5cf6" font-family="JetBrains Mono" font-size="10" font-weight="700">SUPERVISOR</text>
+        <text x="150" y="474" text-anchor="middle" fill="#9898b0" font-family="DM Sans" font-size="8">LangGraph StateGraph</text>
+        <text x="150" y="490" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">route · delegate · aggregate</text>
+        <text x="150" y="506" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">conditional edges + cycles</text>
+
+        <!-- Arrows to agents -->
+        <line x1="230" y1="460" x2="280" y2="438" stroke="#8b5cf6" stroke-opacity="0.4" stroke-width="1.5"/>
+        <line x1="230" y1="475" x2="280" y2="475" stroke="#8b5cf6" stroke-opacity="0.4" stroke-width="1.5"/>
+        <line x1="230" y1="490" x2="280" y2="510" stroke="#8b5cf6" stroke-opacity="0.4" stroke-width="1.5"/>
+
+        <!-- Research Agent -->
+        <rect x="280" y="422" width="170" height="36" rx="6" fill="#00d4ff10" stroke="#00d4ff" stroke-opacity="0.3"/>
+        <text x="365" y="438" text-anchor="middle" fill="#00d4ff" font-family="JetBrains Mono" font-size="9" font-weight="600">🔬 RESEARCHER</text>
+        <text x="365" y="452" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">retrieval + web search</text>
+
+        <!-- Analyst Agent -->
+        <rect x="280" y="462" width="170" height="36" rx="6" fill="#10b98110" stroke="#10b981" stroke-opacity="0.3"/>
+        <text x="365" y="478" text-anchor="middle" fill="#10b981" font-family="JetBrains Mono" font-size="9" font-weight="600">📊 ANALYST</text>
+        <text x="365" y="492" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">synthesis + reasoning</text>
+
+        <!-- Validator Agent -->
+        <rect x="280" y="502" width="170" height="36" rx="6" fill="#f43f5e10" stroke="#f43f5e" stroke-opacity="0.3"/>
+        <text x="365" y="518" text-anchor="middle" fill="#f43f5e" font-family="JetBrains Mono" font-size="9" font-weight="600">✓ VALIDATOR</text>
+        <text x="365" y="532" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">fact-check + halluc. detect</text>
+
+        <!-- Tools -->
+        <rect x="500" y="422" width="230" height="116" rx="8" fill="#0d0d14" stroke="#2a2a3a"/>
+        <text x="520" y="442" fill="#f59e0b" font-family="JetBrains Mono" font-size="8" font-weight="600">TOOL REGISTRY</text>
+        <text x="520" y="462" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">vector_search(query, filters)</text>
+        <text x="520" y="478" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">web_search(query)</text>
+        <text x="520" y="494" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">sql_query(statement)</text>
+        <text x="520" y="510" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">calculate(expression)</text>
+        <text x="520" y="526" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">cite_source(doc_id, span)</text>
+
+        <!-- State / Memory -->
+        <rect x="780" y="422" width="270" height="116" rx="8" fill="#0d0d14" stroke="#2a2a3a"/>
+        <text x="800" y="442" fill="#3b82f6" font-family="JetBrains Mono" font-size="8" font-weight="600">SHARED STATE (LangGraph)</text>
+        <text x="800" y="462" fill="#9898b0" font-family="DM Sans" font-size="9">• Conversation memory (sliding window)</text>
+        <text x="800" y="480" fill="#9898b0" font-family="DM Sans" font-size="9">• Retrieved context accumulator</text>
+        <text x="800" y="498" fill="#9898b0" font-family="DM Sans" font-size="9">• Agent message bus (ACP-style)</text>
+        <text x="800" y="516" fill="#9898b0" font-family="DM Sans" font-size="9">• Reflection loop counter (max 3)</text>
+        <text x="800" y="534" fill="#9898b0" font-family="DM Sans" font-size="9">• SQLite checkpoint persistence</text>
+
+        <!-- ── LAYER 4: GENERATION + GUARDRAILS ── -->
+        <rect x="40" y="592" width="250" height="105" rx="8" fill="#16161f" stroke="#f43f5e" stroke-opacity="0.3"/>
+        <text x="60" y="612" fill="#f43f5e" font-family="JetBrains Mono" font-size="8" font-weight="600">INPUT GUARDRAILS</text>
+        <text x="60" y="632" fill="#9898b0" font-family="DM Sans" font-size="9">• Prompt injection detection</text>
+        <text x="60" y="648" fill="#9898b0" font-family="DM Sans" font-size="9">• PII anonymization (Presidio)</text>
+        <text x="60" y="664" fill="#9898b0" font-family="DM Sans" font-size="9">• Topic restriction classifier</text>
+        <text x="60" y="680" fill="#9898b0" font-family="DM Sans" font-size="9">• Token budget enforcement</text>
+
+        <line x1="290" y1="644" x2="330" y2="644" stroke="#3d3d55" stroke-width="1.5"/>
+
+        <rect x="330" y="592" width="250" height="105" rx="8" fill="#16161f" stroke="#00d4ff" stroke-opacity="0.3"/>
+        <text x="350" y="612" fill="#00d4ff" font-family="JetBrains Mono" font-size="8" font-weight="600">GENERATION ENGINE</text>
+        <text x="350" y="632" fill="#9898b0" font-family="DM Sans" font-size="9">• Context assembly (≤8K tokens)</text>
+        <text x="350" y="648" fill="#9898b0" font-family="DM Sans" font-size="9">• Citation-grounded prompting</text>
+        <text x="350" y="664" fill="#9898b0" font-family="DM Sans" font-size="9">• Token-by-token streaming (SSE)</text>
+        <text x="350" y="680" fill="#9898b0" font-family="DM Sans" font-size="9">• Model: GPT-4o-mini / Claude Haiku</text>
+
+        <line x1="580" y1="644" x2="620" y2="644" stroke="#3d3d55" stroke-width="1.5"/>
+
+        <rect x="620" y="592" width="250" height="105" rx="8" fill="#16161f" stroke="#f59e0b" stroke-opacity="0.3"/>
+        <text x="640" y="612" fill="#f59e0b" font-family="JetBrains Mono" font-size="8" font-weight="600">OUTPUT GUARDRAILS</text>
+        <text x="640" y="632" fill="#9898b0" font-family="DM Sans" font-size="9">• Hallucination score (NLI model)</text>
+        <text x="640" y="648" fill="#9898b0" font-family="DM Sans" font-size="9">• Citation verification</text>
+        <text x="640" y="664" fill="#9898b0" font-family="DM Sans" font-size="9">• Toxicity / bias screening</text>
+        <text x="640" y="680" fill="#9898b0" font-family="DM Sans" font-size="9">• PII leak detection on output</text>
+
+        <line x1="870" y1="644" x2="910" y2="644" stroke="#3d3d55" stroke-width="1.5"/>
+
+        <rect x="910" y="612" width="130" height="55" rx="8" fill="#10b98118" stroke="#10b981" stroke-opacity="0.4"/>
+        <text x="975" y="636" text-anchor="middle" fill="#10b981" font-family="JetBrains Mono" font-size="9" font-weight="700">RESPONSE</text>
+        <text x="975" y="654" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">streaming SSE</text>
+
+        <!-- Semantic Cache (side) -->
+        <rect x="910" y="560" width="150" height="40" rx="6" fill="#16161f" stroke="#3b82f6" stroke-opacity="0.3"/>
+        <text x="985" y="577" text-anchor="middle" fill="#3b82f6" font-family="JetBrains Mono" font-size="8" font-weight="600">SEMANTIC CACHE</text>
+        <text x="985" y="591" text-anchor="middle" fill="#6a6a82" font-family="JetBrains Mono" font-size="7">Upstash Redis + cosine</text>
+
+        <!-- ── LAYER 5: OBSERVABILITY + EVALS ── -->
+        <rect x="40" y="752" width="1030" height="50" rx="8" fill="#16161f" stroke="#3b82f6" stroke-opacity="0.2" stroke-dasharray="4"/>
+        <text x="70" y="775" fill="#3b82f6" font-family="JetBrains Mono" font-size="9" font-weight="600">LANGFUSE OBSERVABILITY</text>
+        <text x="290" y="775" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">traces</text>
+        <text x="370" y="775" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">cost tracking</text>
+        <text x="490" y="775" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">latency budgets</text>
+        <text x="630" y="775" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">RAGAS evals</text>
+        <text x="750" y="775" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">LLM-as-Judge</text>
+        <text x="870" y="775" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">drift alerts</text>
+        <text x="980" y="775" fill="#6a6a82" font-family="JetBrains Mono" font-size="8">dashboards</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ────────── COMPONENTS DEEP-DIVE ────────── -->
+<section id="components">
+  <div class="container">
+    <p class="section-label">03 — Component Deep-Dive</p>
+    <h2 class="section-title">Every Layer, Unpacked</h2>
+    <p class="section-desc">
+      Each component below is designed to be independently testable, replaceable, and observable. 
+      This is not a demo — it's how production AI systems are architected.
+    </p>
+
+    <!-- Component 1: Ingestion -->
+    <div class="component-card accent-cyan">
+      <div class="card-header">
+        <span class="card-number">01</span>
+        <h3 class="card-title">Document Ingestion & Enrichment Pipeline</h3>
+      </div>
+      <div class="card-body">
+        <p>
+          An async enrichment worker pipeline processes documents through six stages. Each stage is 
+          a discrete, retryable unit of work. The pipeline uses a <span class="il">Celery</span> task queue 
+          backed by <span class="il">Upstash Redis</span> for coordination, with dead-letter queues for 
+          failed processing.
+        </p>
+        <div class="flow-steps">
+          <div class="flow-step"><h4>Parse</h4><span>unstructured.io<br/>PDF / DOCX / HTML</span></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><h4>Clean</h4><span>normalize<br/>dedup (SimHash)</span></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><h4>Chunk</h4><span>semantic split<br/>cosine breakpoints</span></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><h4>Enrich</h4><span>extract entities<br/>classify topic</span></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><h4>Embed</h4><span>dense + sparse<br/>batch encode</span></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><h4>Upsert</h4><span>Qdrant + PG<br/>metadata index</span></div>
+        </div>
+
+        <p class="sub-heading">Semantic Chunking Strategy</p>
+        <p>
+          Fixed-size chunking achieves ~0.49 faithfulness. Semantic chunking achieves ~0.81. 
+          The system computes sentence-level embeddings and splits at cosine similarity valleys, 
+          preserving semantic coherence. Parent-child document hierarchy allows retrieval of 
+          surrounding context when a specific chunk is matched. Table-aware splitting detects 
+          tabular structures and keeps them intact rather than fragmenting rows across chunks.
+        </p>
+
+        <div class="code-block">
+          <span class="code-label">Python</span>
+<span class="kw">class</span> <span class="type">SemanticChunker</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, embed_model, threshold=<span class="num">0.3</span>, min_chunk=<span class="num">100</span>, max_chunk=<span class="num">512</span>):
+        self.embed_model = embed_model
+        self.breakpoint_threshold = threshold  <span class="cmt"># cosine distance threshold</span>
+
+    <span class="kw">def</span> <span class="fn">chunk</span>(self, document: <span class="type">ParsedDocument</span>) -> list[<span class="type">Chunk</span>]:
+        sentences = self.<span class="fn">split_sentences</span>(document.text)
+        embeddings = self.embed_model.<span class="fn">encode</span>(sentences, batch_size=<span class="num">64</span>)
+        distances = <span class="fn">cosine_distances</span>(embeddings[:-<span class="num">1</span>], embeddings[<span class="num">1</span>:])
+        breakpoints = distances > self.<span class="fn">percentile_threshold</span>(distances)
+
+        chunks = self.<span class="fn">merge_at_breakpoints</span>(sentences, breakpoints)
+        <span class="cmt"># Attach parent doc reference + context header for each chunk</span>
+        <span class="kw">return</span> [
+            <span class="type">Chunk</span>(text=c, parent_id=document.id, header=document.title)
+            <span class="kw">for</span> c <span class="kw">in</span> chunks
+        ]
+        </div>
+      </div>
+    </div>
+
+    <!-- Component 2: Hybrid Retrieval -->
+    <div class="component-card accent-amber">
+      <div class="card-header">
+        <span class="card-number">02</span>
+        <h3 class="card-title">Hybrid Retrieval with Cross-Encoder Reranking</h3>
+      </div>
+      <div class="card-body">
+        <p>
+          The retrieval layer combines dense and sparse search through Reciprocal Rank Fusion, then 
+          applies a cross-encoder reranker for precision. A Self-RAG relevance gate decides whether 
+          retrieved context is sufficient or needs a re-retrieval cycle.
+        </p>
+
+        <ul>
+          <li><strong>Dense search:</strong> <span class="il">all-MiniLM-L6-v2</span> embeddings in Qdrant with HNSW index, cosine similarity, top-50</li>
+          <li><strong>Sparse search:</strong> BM25 via <span class="il">rank_bm25</span> library on tokenized corpus stored in Supabase, top-50</li>
+          <li><strong>Fusion:</strong> Reciprocal Rank Fusion (k=60) merges both result sets into a unified top-20</li>
+          <li><strong>Reranking:</strong> <span class="il">cross-encoder/ms-marco-MiniLM-L-6-v2</span> scores (query, passage) pairs, outputs top-5</li>
+          <li><strong>Self-RAG Gate:</strong> NLI model scores relevance of each chunk to query. Chunks below 0.7 threshold trigger a query-rewrite and re-retrieval cycle (max 2 retries)</li>
+          <li><strong>Metadata pre-filtering:</strong> Date range, document type, source filters applied before vector search for efficiency</li>
+        </ul>
+
+        <div class="code-block">
+          <span class="code-label">Python</span>
+<span class="kw">async def</span> <span class="fn">hybrid_retrieve</span>(query: str, filters: <span class="type">MetadataFilters</span>) -> list[<span class="type">RankedChunk</span>]:
+    <span class="cmt"># Parallel dense + sparse retrieval</span>
+    dense_task = <span class="fn">qdrant_search</span>(query_embedding, filters, top_k=<span class="num">50</span>)
+    sparse_task = <span class="fn">bm25_search</span>(query_tokens, top_k=<span class="num">50</span>)
+    dense_results, sparse_results = <span class="kw">await</span> asyncio.<span class="fn">gather</span>(dense_task, sparse_task)
+
+    <span class="cmt"># Reciprocal Rank Fusion</span>
+    fused = <span class="fn">reciprocal_rank_fusion</span>(dense_results, sparse_results, k=<span class="num">60</span>)
+
+    <span class="cmt"># Cross-encoder reranking</span>
+    reranked = cross_encoder.<span class="fn">rank</span>(query, fused[:<span class="num">20</span>])
+
+    <span class="cmt"># Self-RAG relevance gate</span>
+    relevant = [c <span class="kw">for</span> c <span class="kw">in</span> reranked[:<span class="num">5</span>] <span class="kw">if</span> c.relevance_score >= <span class="num">0.7</span>]
+    <span class="kw">if not</span> relevant:
+        rewritten = <span class="kw">await</span> <span class="fn">rewrite_query</span>(query)
+        <span class="kw">return await</span> <span class="fn">hybrid_retrieve</span>(rewritten, filters)  <span class="cmt"># retry once</span>
+    <span class="kw">return</span> relevant
+        </div>
+      </div>
+    </div>
+
+    <!-- Component 3: Adaptive Query Router -->
+    <div class="component-card accent-emerald">
+      <div class="card-header">
+        <span class="card-number">03</span>
+        <h3 class="card-title">Adaptive Query Router</h3>
+      </div>
+      <div class="card-body">
+        <p>
+          Not every query needs the full agentic pipeline. A lightweight LLM-based classifier 
+          (distilled to a fine-tuned <span class="il">DeBERTa-v3-small</span>) routes queries into three 
+          tiers, reducing cost by up to 4× on simple queries while preserving quality on complex ones.
+        </p>
+
+        <ul>
+          <li><strong>Tier 1 — Direct LLM:</strong> Simple greetings, definitions, opinions. Bypasses retrieval entirely. Cost: ~0.001¢/query</li>
+          <li><strong>Tier 2 — Single-Step RAG:</strong> Factoid lookups, specific data points. One retrieval + generation pass. Cost: ~0.02¢/query</li>
+          <li><strong>Tier 3 — Agentic Multi-Hop:</strong> Comparative analysis, multi-source synthesis, reasoning chains. Full agent loop. Cost: ~0.08¢/query</li>
+        </ul>
+
+        <div class="code-block">
+          <span class="code-label">Python</span>
+<span class="kw">class</span> <span class="type">QueryRouter</span>:
+    <span class="cmt">"""Routes queries by complexity. Trained on 2K labeled examples."""</span>
+
+    <span class="kw">def</span> <span class="fn">classify</span>(self, query: str) -> <span class="type">Literal</span>[<span class="str">"direct"</span>, <span class="str">"rag"</span>, <span class="str">"agentic"</span>]:
+        features = self.<span class="fn">extract_features</span>(query)  <span class="cmt"># length, entity count, question type</span>
+        <span class="kw">return</span> self.classifier.<span class="fn">predict</span>(features)
+
+    <span class="kw">def</span> <span class="fn">route</span>(self, query: str, state: <span class="type">GraphState</span>) -> str:
+        tier = self.<span class="fn">classify</span>(query)
+        <span class="kw">match</span> tier:
+            <span class="kw">case</span> <span class="str">"direct"</span>:  <span class="kw">return</span> <span class="str">"generate_node"</span>
+            <span class="kw">case</span> <span class="str">"rag"</span>:     <span class="kw">return</span> <span class="str">"retrieve_node"</span>
+            <span class="kw">case</span> <span class="str">"agentic"</span>: <span class="kw">return</span> <span class="str">"supervisor_node"</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Component 4: Multi-Agent Orchestration -->
+    <div class="component-card accent-violet">
+      <div class="card-header">
+        <span class="card-number">04</span>
+        <h3 class="card-title">Multi-Agent Orchestration (LangGraph)</h3>
+      </div>
+      <div class="card-body">
+        <p>
+          The agent layer implements a <strong>Supervisor/Worker</strong> pattern via LangGraph's 
+          <span class="il">StateGraph</span>. The Supervisor delegates to three specialist agents, each with 
+          access to a shared tool registry. Conditional edges enable a reflection loop where the 
+          Validator can reject an Analyst's output and trigger re-processing.
+        </p>
+
+        <ul>
+          <li><strong>Supervisor:</strong> Routes tasks, manages agent turns, enforces max iterations (3 cycles), aggregates final output</li>
+          <li><strong>Researcher Agent:</strong> Has access to vector_search, web_search, and sql_query tools. Retrieves and organizes source material</li>
+          <li><strong>Analyst Agent:</strong> Synthesizes retrieved context into structured analysis. Performs multi-hop reasoning across documents</li>
+          <li><strong>Validator Agent:</strong> Runs NLI-based fact-checking against retrieved sources. Scores hallucination risk. Can trigger re-analysis via reflection edge</li>
+          <li><strong>Shared State:</strong> ACP-style message bus in LangGraph state. Pydantic-validated messages with sender, content, confidence_score, and source_citations</li>
+          <li><strong>Persistence:</strong> SQLite checkpoint allows conversation resumption and time-travel debugging</li>
+        </ul>
+
+        <div class="code-block">
+          <span class="code-label">Python · LangGraph</span>
+<span class="kw">from</span> langgraph.graph <span class="kw">import</span> <span class="type">StateGraph</span>, <span class="type">END</span>
+
+graph = <span class="type">StateGraph</span>(<span class="type">NexusState</span>)
+
+graph.<span class="fn">add_node</span>(<span class="str">"router"</span>, query_router)
+graph.<span class="fn">add_node</span>(<span class="str">"supervisor"</span>, supervisor_agent)
+graph.<span class="fn">add_node</span>(<span class="str">"researcher"</span>, researcher_agent)
+graph.<span class="fn">add_node</span>(<span class="str">"analyst"</span>, analyst_agent)
+graph.<span class="fn">add_node</span>(<span class="str">"validator"</span>, validator_agent)
+graph.<span class="fn">add_node</span>(<span class="str">"generate"</span>, generation_node)
+
+<span class="cmt"># Adaptive routing from entry</span>
+graph.<span class="fn">add_conditional_edges</span>(<span class="str">"router"</span>, route_by_complexity)
+
+<span class="cmt"># Supervisor delegates to specialist agents</span>
+graph.<span class="fn">add_conditional_edges</span>(<span class="str">"supervisor"</span>, delegate_to_agent)
+
+<span class="cmt"># Reflection loop: validator can reject and re-trigger analyst</span>
+graph.<span class="fn">add_conditional_edges</span>(<span class="str">"validator"</span>, {
+    <span class="str">"approved"</span>: <span class="str">"generate"</span>,
+    <span class="str">"rejected"</span>: <span class="str">"analyst"</span>,   <span class="cmt"># reflection cycle</span>
+    <span class="str">"max_retries"</span>: <span class="str">"generate"</span>,  <span class="cmt"># bail with best-effort</span>
+})
+
+graph.<span class="fn">set_entry_point</span>(<span class="str">"router"</span>)
+app = graph.<span class="fn">compile</span>(checkpointer=<span class="type">SqliteSaver</span>(<span class="str">"nexus.db"</span>))
+        </div>
+      </div>
+    </div>
+
+    <!-- Component 5: Guardrails -->
+    <div class="component-card accent-rose">
+      <div class="card-header">
+        <span class="card-number">05</span>
+        <h3 class="card-title">Multi-Layer Guardrails</h3>
+      </div>
+      <div class="card-body">
+        <p>
+          Defense-in-depth across input and output boundaries. Guardrails run at the application 
+          layer and are complementary to model-level safety training. Every guardrail invocation is 
+          traced in Langfuse for monitoring.
+        </p>
+
+        <div class="two-col">
+          <div>
+            <p class="sub-heading">Input Guardrails</p>
+            <ul>
+              <li><strong>Prompt Injection:</strong> LLM Guard scanner classifies user input for injection patterns. Blocks and logs attempts</li>
+              <li><strong>PII Anonymization:</strong> Microsoft Presidio detects and masks sensitive data (SSN, email, phone) before LLM context</li>
+              <li><strong>Topic Restriction:</strong> Zero-shot classifier gates off-topic or restricted domain queries</li>
+              <li><strong>Token Budget:</strong> Hard limit on input tokens prevents abuse. Rate limiting per session</li>
+            </ul>
+          </div>
+          <div>
+            <p class="sub-heading">Output Guardrails</p>
+            <ul>
+              <li><strong>Hallucination Score:</strong> NLI model computes entailment between generated answer and retrieved context</li>
+              <li><strong>Citation Verification:</strong> Every claim must trace to a retrieved chunk. Uncited claims are flagged</li>
+              <li><strong>Toxicity Filter:</strong> Post-generation toxicity and bias screening via LLM Guard output scanners</li>
+              <li><strong>PII Leak Detection:</strong> Re-scan output for accidental PII leakage from training data or context</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Component 6: Evaluation -->
+    <div class="component-card accent-blue">
+      <div class="card-header">
+        <span class="card-number">06</span>
+        <h3 class="card-title">Evaluation Pipeline (RAGAS + LLM-as-Judge)</h3>
+      </div>
+      <div class="card-body">
+        <p>
+          60% of production RAG deployments in 2026 include systematic evaluation from day one. 
+          NEXUS runs evaluations in three modes: offline regression (CI/CD), online sampling (production), 
+          and human annotation (quality review).
+        </p>
+
+        <div class="metrics-row">
+          <div class="metric-card">
+            <div class="metric-val" style="color: var(--accent-cyan);">≥0.85</div>
+            <div class="metric-label">Faithfulness</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val" style="color: var(--accent-violet);">≥0.80</div>
+            <div class="metric-label">Answer Relevance</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val" style="color: var(--accent-emerald);">≥0.75</div>
+            <div class="metric-label">Context Precision</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val" style="color: var(--accent-amber);">≥0.78</div>
+            <div class="metric-label">Context Recall</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val" style="color: var(--accent-rose);">&lt;2s</div>
+            <div class="metric-label">E2E Latency (p95)</div>
+          </div>
+        </div>
+
+        <ul>
+          <li><strong>Offline Regression:</strong> 200+ golden Q&A pairs run on every PR. Blocks merge if faithfulness drops &gt; 5%</li>
+          <li><strong>Online Sampling:</strong> 5% of production queries routed through full RAGAS evaluation. Metrics pushed to Langfuse dashboard</li>
+          <li><strong>LLM-as-Judge:</strong> Claude Haiku scores answers on correctness, completeness, and citation quality (1-5 rubric)</li>
+          <li><strong>Human Annotation:</strong> Langfuse annotation queue for domain expert review. Feedback loops into golden dataset</li>
+          <li><strong>Drift Detection:</strong> Statistical monitoring of evaluation metrics over time. Alerts on significant degradation</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Component 7: Observability -->
+    <div class="component-card accent-blue">
+      <div class="card-header">
+        <span class="card-number">07</span>
+        <h3 class="card-title">Observability & Monitoring (Langfuse)</h3>
+      </div>
+      <div class="card-body">
+        <p>
+          Every LLM call, tool invocation, retrieval operation, and agent transition is traced. 
+          The system uses Langfuse's <span class="il">@observe()</span> decorator for zero-config instrumentation 
+          across the entire pipeline.
+        </p>
+
+        <div class="pipeline-visual">
+          <div class="pipeline-layer">
+            <span class="pl-name">Trace Capture</span>
+            <span class="pl-tech">Every request → hierarchical span tree with parent/child relationships</span>
+          </div>
+          <div class="pipeline-layer">
+            <span class="pl-name">Cost Tracking</span>
+            <span class="pl-tech">Per-model token costs aggregated by route tier, agent, and session</span>
+          </div>
+          <div class="pipeline-layer">
+            <span class="pl-name">Latency Budget</span>
+            <span class="pl-tech">Target &lt;2s e2e. Breakdown: retrieval ~300ms, rerank ~200ms, LLM ~1200ms</span>
+          </div>
+          <div class="pipeline-layer">
+            <span class="pl-name">Quality Scores</span>
+            <span class="pl-tech">RAGAS metrics + LLM-as-Judge scores attached to each trace</span>
+          </div>
+          <div class="pipeline-layer">
+            <span class="pl-name">Alerting</span>
+            <span class="pl-tech">Webhook alerts on: faithfulness drop, latency spike, cost anomaly, error rate</span>
+          </div>
+          <div class="pipeline-layer">
+            <span class="pl-name">Dashboards</span>
+            <span class="pl-tech">Real-time quality, cost, and usage dashboards. Drill-down into individual traces</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Component 8: Semantic Cache -->
+    <div class="component-card accent-cyan">
+      <div class="card-header">
+        <span class="card-number">08</span>
+        <h3 class="card-title">Semantic Caching Layer</h3>
+      </div>
+      <div class="card-body">
+        <p>
+          Production RAG systems see significant query repetition. Rather than exact-match caching, 
+          NEXUS implements semantic caching: incoming queries are embedded and compared against 
+          cached query embeddings. If cosine similarity exceeds 0.95, the cached response is returned 
+          without re-executing the pipeline. This eliminates redundant LLM calls and reduces p95 
+          latency for repeated queries from ~2s to ~50ms.
+        </p>
+        <ul>
+          <li><strong>Storage:</strong> Upstash Redis with JSON values (response + metadata + TTL)</li>
+          <li><strong>Similarity:</strong> Cosine distance on query embeddings with 0.95 threshold</li>
+          <li><strong>TTL:</strong> 24h default, configurable per document source (shorter for real-time data)</li>
+          <li><strong>Invalidation:</strong> Cache entries are purged on document re-ingestion via pub/sub</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ────────── TECH STACK ────────── -->
+<section id="stack">
+  <div class="container">
+    <p class="section-label">04 — Technology Stack</p>
+    <h2 class="section-title">Production Stack</h2>
+    <p class="section-desc">
+      Every component is chosen for production fitness, free/low-cost tiers, and modern best practices. 
+      No vendor lock-in — all critical components have open-source alternatives.
+    </p>
+
+    <div class="stack-grid">
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-violet-dim); color: var(--accent-violet);">🐍</div>
+        <div class="stack-info"><h4>Python 3.12 + FastAPI</h4><span>Backend framework</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-cyan-dim); color: var(--accent-cyan);">🔗</div>
+        <div class="stack-info"><h4>LangGraph + LangChain</h4><span>Agent orchestration</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-emerald-dim); color: var(--accent-emerald);">🧠</div>
+        <div class="stack-info"><h4>GPT-4o-mini / Claude Haiku</h4><span>LLM generation</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-amber-dim); color: var(--accent-amber);">📐</div>
+        <div class="stack-info"><h4>Sentence Transformers</h4><span>Dense embeddings</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-rose-dim); color: var(--accent-rose);">🔎</div>
+        <div class="stack-info"><h4>Qdrant Cloud</h4><span>Vector database (HNSW)</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-blue-dim); color: var(--accent-blue);">🐘</div>
+        <div class="stack-info"><h4>Supabase PostgreSQL</h4><span>Metadata + BM25 index</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-rose-dim); color: var(--accent-rose);">⚡</div>
+        <div class="stack-info"><h4>Upstash Redis</h4><span>Cache + task queue</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-violet-dim); color: var(--accent-violet);">⚛️</div>
+        <div class="stack-info"><h4>Next.js 15 + Vercel</h4><span>Frontend + hosting</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-cyan-dim); color: var(--accent-cyan);">📡</div>
+        <div class="stack-info"><h4>Langfuse</h4><span>Observability + evals</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-emerald-dim); color: var(--accent-emerald);">🛡️</div>
+        <div class="stack-info"><h4>LLM Guard + Presidio</h4><span>Guardrails</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-amber-dim); color: var(--accent-amber);">📊</div>
+        <div class="stack-info"><h4>RAGAS</h4><span>Evaluation framework</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon" style="background: var(--accent-blue-dim); color: var(--accent-blue);">🚂</div>
+        <div class="stack-info"><h4>Railway</h4><span>Backend deployment</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ────────── DEPLOYMENT ────────── -->
+<section id="deployment">
+  <div class="container">
+    <p class="section-label">05 — Deployment & Cost</p>
+    <h2 class="section-title">Zero-to-Low Cost Production Deploy</h2>
+    <p class="section-desc">
+      The entire platform runs on free and low-cost tiers. At moderate scale (1K queries/day), 
+      total cost stays under $15/month. At idle/demo scale, it's effectively free.
+    </p>
+
+    <table class="cost-table">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Role</th>
+          <th>Tier</th>
+          <th>Monthly Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Railway</td>
+          <td>FastAPI backend + workers</td>
+          <td>Hobby ($5 credit)</td>
+          <td class="cost-val">$0 – $5</td>
+        </tr>
+        <tr>
+          <td>Vercel</td>
+          <td>Next.js frontend</td>
+          <td>Free (100K invocations)</td>
+          <td class="cost-val">$0</td>
+        </tr>
+        <tr>
+          <td>Qdrant Cloud</td>
+          <td>Vector database</td>
+          <td>Free (1GB, 1M vectors)</td>
+          <td class="cost-val">$0</td>
+        </tr>
+        <tr>
+          <td>Supabase</td>
+          <td>PostgreSQL + auth</td>
+          <td>Free (500MB, 50K MAU)</td>
+          <td class="cost-val">$0</td>
+        </tr>
+        <tr>
+          <td>Upstash Redis</td>
+          <td>Cache + pub/sub</td>
+          <td>Free (10K cmds/day)</td>
+          <td class="cost-val">$0</td>
+        </tr>
+        <tr>
+          <td>Langfuse Cloud</td>
+          <td>Observability</td>
+          <td>Free (50K observations)</td>
+          <td class="cost-val">$0</td>
+        </tr>
+        <tr>
+          <td>OpenAI / Anthropic</td>
+          <td>LLM inference</td>
+          <td>Pay-per-token</td>
+          <td class="cost-val">$3 – $10</td>
+        </tr>
+        <tr class="cost-total">
+          <td colspan="3">Total Monthly Cost (demo/portfolio scale)</td>
+          <td class="cost-val">$3 – $15</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top: 48px;">
+      <p class="sub-heading" style="font-family: var(--font-display); font-size: 1.5rem;">Deployment Architecture</p>
+      <div class="pipeline-visual" style="margin-top: 20px;">
+        <div class="pipeline-layer">
+          <span class="pl-name" style="color: var(--accent-cyan);">CI/CD</span>
+          <span class="pl-tech">GitHub Actions → Run RAGAS evals on golden dataset → Block merge if regression → Deploy to Railway + Vercel</span>
+        </div>
+        <div class="pipeline-layer">
+          <span class="pl-name" style="color: var(--accent-violet);">Backend</span>
+          <span class="pl-tech">Railway auto-deploy from main branch → Docker container → FastAPI with Uvicorn → Scale-to-zero on idle</span>
+        </div>
+        <div class="pipeline-layer">
+          <span class="pl-name" style="color: var(--accent-emerald);">Frontend</span>
+          <span class="pl-tech">Vercel auto-deploy → Next.js SSR + edge functions → SSE streaming endpoint → Preview deploys on PRs</span>
+        </div>
+        <div class="pipeline-layer">
+          <span class="pl-name" style="color: var(--accent-amber);">Data Layer</span>
+          <span class="pl-tech">Qdrant Cloud (managed) + Supabase (managed) + Upstash Redis (serverless) → All auto-scaling, zero-ops</span>
+        </div>
+        <div class="pipeline-layer">
+          <span class="pl-name" style="color: var(--accent-rose);">Monitoring</span>
+          <span class="pl-tech">Langfuse traces → Quality dashboards → Alerting webhooks to Slack/email → Annotation queues for review</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ────────── FUTURE IMPROVEMENTS ────────── -->
+<section>
+  <div class="container">
+    <p class="section-label">06 — Future Improvements</p>
+    <h2 class="section-title">Roadmap</h2>
+    <p class="section-desc">
+      NEXUS is designed with extensibility in mind. Each improvement below adds a new dimension 
+      of production sophistication.
+    </p>
+
+    <div class="overview-grid">
+      <div class="overview-cell">
+        <h3>GraphRAG Integration</h3>
+        <p>Build a knowledge graph layer (Neo4j/Memgraph) alongside vector search for entity-relationship reasoning. Enables questions like "What connects X to Y?"</p>
+      </div>
+      <div class="overview-cell">
+        <h3>Fine-Tuned Embeddings</h3>
+        <p>LoRA fine-tune sentence-transformers on domain-specific data using PEFT. Expected 10-20% relevance improvement on domain queries.</p>
+      </div>
+      <div class="overview-cell">
+        <h3>Multimodal RAG</h3>
+        <p>Extend ingestion to process images, charts, and diagrams using ColPali/ColQwen multi-vector late interaction for native visual retrieval.</p>
+      </div>
+      <div class="overview-cell">
+        <h3>A/B Prompt Testing</h3>
+        <p>Integrate prompt versioning with Langfuse to A/B test different system prompts and measure impact on RAGAS metrics in production.</p>
+      </div>
+      <div class="overview-cell">
+        <h3>MCP Server</h3>
+        <p>Expose NEXUS as a Model Context Protocol server, allowing any MCP-compatible agent to use it as a research tool with standardized context exchange.</p>
+      </div>
+      <div class="overview-cell">
+        <h3>User Feedback Loop</h3>
+        <p>Thumbs up/down and correction signals feed back into the golden evaluation dataset. RLHF-lite approach to continuous quality improvement.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ────────── CONCLUSION ────────── -->
+<section>
+  <div class="container" style="text-align: center; max-width: 800px;">
+    <p class="section-label">07 — Conclusion</p>
+    <h2 class="section-title">Production AI, Not Toy Demos</h2>
+    <p style="color: var(--text-secondary); font-size: 1.02rem; line-height: 1.9;">
+      NEXUS demonstrates that a production-grade applied AI system can be built, deployed, and 
+      operated at near-zero cost while incorporating every modern technique: multi-agent orchestration, 
+      adaptive RAG, hybrid retrieval with cross-encoder reranking, Self-RAG validation, comprehensive 
+      guardrails, RAGAS evaluation pipelines, full observability, and semantic caching. Every layer 
+      is independently testable, observable, and replaceable — the hallmark of real production 
+      architecture.
+    </p>
+    <a href="https://github.com/bellerophon95" target="_blank" class="gh-button" style="margin: 36px auto;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      View on GitHub
+    </a>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>© 2026 Vibhor Kashmira · Project NEXUS · <a href="https://bellerophon95.github.io/mypage/">Portfolio</a></p>
+  </div>
+</footer>
+
+<script>
+  // Nav scroll effect
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 50);
+  });
+
+  // Smooth scroll for nav links
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function(e) {
+      e.preventDefault();
+      document.querySelector(this.getAttribute('href')).scrollIntoView({
+        behavior: 'smooth'
+      });
+    });
+  });
+</script>
+</body>
+</html>

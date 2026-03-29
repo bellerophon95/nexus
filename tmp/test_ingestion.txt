@@ -1,0 +1,14 @@
+Nexus Ingestion Pipeline Test v3
+==============================
+
+This is a unique test document for the Nexus project.
+It contains technical information about the ingestion system.
+We want to see it stored in Supabase with vector embeddings.
+The pipeline should:
+- Parse this text
+- Deduplicate using SimHash
+- Semantic chunking (spaCy)
+- Vectorize (all-MiniLM-L6-v2)
+- Store doc and chunks in Supabase
+
+Verification Token: [NEXUS-V3-SUCCESS]

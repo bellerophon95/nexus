@@ -1,0 +1,19 @@
+Vibhor Kashmira is a Senior Fullstack Engineer based in Detroit, Michigan. 
+He specializes in event-driven backend systems, data-intensive applications, and frontend performance optimization.
+His core technical stack includes Java, Python, JavaScript, SQL, and modern web frameworks. 
+He has extensive experience with:
+- Microservices architecture with Spring Boot
+- Event-driven architecture (Apache Kafka, Pub-Sub)
+- gRPC and RESTful API design
+- Frontend development (React, NextJS)
+- Real-time data processing (Apache Flink)
+- Cloud infrastructure (AWS Lambda, EC2, Kubernetes)
+- Database optimization (MongoDB sharding, Postgres)
+- Technical leadership, mentoring, and stakeholder collaboration.
+
+Education: 
+- Master of Science in Computer Science from Wayne State University (Dean's List).
+- Bachelor of Technology in Computer Science from LNMIIT.
+Representative Projects:
+- Rentaroost: A robust Airbnb clone with dynamic pricing pipelines and real-time event tracking.
+- Project Nexus: A high-performance AI observability and RAG foundation.

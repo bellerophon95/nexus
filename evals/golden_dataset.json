@@ -1,0 +1,52 @@
+[
+  {
+    "question": "What are the core components of the Project Nexus ingestion pipeline?",
+    "ground_truth": "The Project Nexus ingestion pipeline consists of parsing, cleaning, semantic chunking, enrichment, embedding, and upserting stages.",
+    "tier": "Tier 1: Simple Retrieval"
+  },
+  {
+    "question": "How does the Semantic Chunker determine where to split text?",
+    "ground_truth": "The Semantic Chunker uses sentence-transformers and spaCy for sentence segmentation, applying cosine-distance breakpoints at the 90th percentile to identify semantic shifts.",
+    "tier": "Tier 1: Simple Retrieval"
+  },
+  {
+    "question": "Explain the role of the Supervisor node in the agentic workflow.",
+    "ground_truth": "The Supervisor node acts as an orchestrator that decides which agent (researcher, analyst, or validator) to call next based on the current state and conversation history.",
+    "tier": "Tier 2: Agentic Reasoning"
+  },
+  {
+    "question": "What happens when the Validator node rejects an analyst's response?",
+    "ground_truth": "When the Validator rejects a response (score < 0.7), it provides feedback, and the Supervisor routes the flow back to the Analyst to correct the errors.",
+    "tier": "Tier 2: Agentic Reasoning"
+  },
+  {
+    "question": "What types of PII are detected by the input guardrails?",
+    "ground_truth": "The input guardrails detect PHONE_NUMBER, EMAIL_ADDRESS, CREDIT_CARD, LOCATION, and PERSON using Presidio.",
+    "tier": "Tier 1: Simple Retrieval"
+  },
+  {
+    "question": "How does Project Nexus handle near-duplicate documents during ingestion?",
+    "ground_truth": "It uses SimHash fingerprints and checks for a Hamming distance of less than 3 against the document_hashes table in Supabase.",
+    "tier": "Tier 3: Complex/Multi-hop"
+  },
+  {
+    "question": "Describe the hybrid search strategy used in the retrieval layer.",
+    "ground_truth": "Project Nexus uses hybrid search combining dense vectors (MiniLM) and sparse BM25 scores, followed by a cross-encoder reranking step.",
+    "tier": "Tier 2: Agentic Reasoning"
+  },
+  {
+    "question": "What metrics are used by RAGAS to evaluate the system performance?",
+    "ground_truth": "RAGAS evaluates faithfulness, answer relevancy, context precision, and context recall.",
+    "tier": "Tier 1: Simple Retrieval"
+  },
+  {
+    "question": "How is token cost tracked and scored in Langfuse?",
+    "ground_heat": "Token usage is captured from OpenAI metadata, converted to USD using pricing tables for GPT-4o-mini and Claude Haiku, and pushed to Langfuse as a 'total_cost_usd' score.",
+    "tier": "Tier 2: Agentic Reasoning"
+  },
+  {
+    "question": "What is the function of the self-rag gate in the retrieval process?",
+    "ground_truth": "The self-rag gate evaluates if the retrieved context is sufficient to answer the query; if not, it may trigger further search or explain the missing information.",
+    "tier": "Tier 3: Complex/Multi-hop"
+  }
+]

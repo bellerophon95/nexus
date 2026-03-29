@@ -1,0 +1,7 @@
+This is a unique document for testing the Nexus ingestion pipeline.
+It contains some entities like Google and San Francisco.
+It explains how RAG works with vector databases and sparse embeddings.
+The goal is to verify that the 500 internal server error is fixed and the document is correctly processed.
+AI is the future of productivity.
+Nexus is the platform for agentic workflows.
+New line to ensure a different fingerprint 12345.
