@@ -10,9 +10,8 @@ RUN apt-get update && apt-get install -y \
     git \
     libmagic1 \
     poppler-utils \
-    tesseract-ocr \
-    libreoffice \
-    pandoc \
+    libmagic1 \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install numpy first to satisfy build-time dependencies of other packages (e.g., scikit-network)
