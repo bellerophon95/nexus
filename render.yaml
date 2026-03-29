@@ -1,4 +1,4 @@
-services:
+    services:
   # Backend FastAPI Service
   - type: web
     name: nexus-backend
@@ -53,6 +53,6 @@ services:
         fromService:
           type: web
           name: nexus-backend
-          property: url
+          property:host
       - key: NODE_ENV
         value: production
