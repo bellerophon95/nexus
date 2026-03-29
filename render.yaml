@@ -53,6 +53,6 @@
         fromService:
           type:  web 
            name: nexus-backend
-          property:host
+          property: host
        - key: NODE_ENV
         value: production
