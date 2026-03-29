@@ -1,16 +1,6 @@
-    services:
-  # Backend FastAPI Service
-  - type: web
-    name: nexus-backend
-    env: docker
-    plan: standard # 2GB RAM required for sentence-transformers and unstructured
-    region: ohio
-    dockerContext: .
-    dockerfilePath: ./Dockerfile
-    healthCheckPath: /api/health
+envVarGroups:
+  - name: nexus-secrets
     envVars:
-      - key: PORT
-        value: 8000
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY
@@ -39,6 +29,23 @@
         sync: false
       - key: ENV
         value: production
+      - key: LANGFUSE_ENVIRONMENT
+        value: production
+
+services:
+  # Backend FastAPI Service
+  - type: web
+    name: nexus-backend
+    env: docker
+    plan: standard # 2GB RAM required for AI models and PDF processing
+    region: ohio
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 8000
+      - fromGroup: nexus-secrets
 
   # Frontend Next.js Service
   - type: web
@@ -46,13 +53,16 @@
     env: node
     plan: starter
     region: ohio
-    buildCommand: cd frontend && npm install && npm run build
-    startCommand: cd frontend && npm run start
+    rootDirectory: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NEXT_PUBLIC_API_URL
         fromService:
-                  type: web
-                            name: nexus-backend
-                                      property: host
-                                            - key: NODE_ENV
-                                                    value: production
+          type: web
+          name: nexus-backend
+          property: url
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
