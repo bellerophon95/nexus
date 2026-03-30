@@ -25,6 +25,15 @@ COPY pyproject.toml poetry.lock* ./
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --no-root
 
+# Pre-download ML models for stability and speed
+# 1. Download spaCy model
+RUN python -m spacy download en_core_web_sm
+
+# 2. Download SentenceTransformer models
+# We copy the download script early to leverage layer caching for models
+COPY scripts/download_models.py ./scripts/download_models.py
+RUN python scripts/download_models.py
+
 # Copy application code
 COPY . .
 
