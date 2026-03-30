@@ -3,7 +3,6 @@ import json
 import asyncio
 import traceback
 from typing import Dict, Any, Optional
-from anthropic import Anthropic
 from backend.config import settings
 from backend.observability.tracing import get_langfuse_client
 
