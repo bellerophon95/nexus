@@ -1,69 +1,68 @@
 envVarGroups:
   - name: nexus-secrets
-      envVars:
-            - key: SUPABASE_URL
-                    sync: false
-                          - key: SUPABASE_ANON_KEY
-                                  sync: false
-                                        - key: SUPABASE_SERVICE_ROLE_KEY
-                                                sync: false
-                                                      - key: DATABASE_URL
-                                                              sync: false
-                                                                    - key: QDRANT_URL
-                                                                            sync: false
-                                                                                  - key: QDRANT_API_KEY
-                                                                                          sync: false
-                                                                                                - key: UPSTASH_REDIS_REST_URL
-                                                                                                        sync: false
-                                                                                                              - key: UPSTASH_REDIS_REST_TOKEN
-                                                                                                                      sync: false
-                                                                                                                            - key: LANGFUSE_PUBLIC_KEY
-                                                                                                                                    sync: false
-                                                                                                                                          - key: LANGFUSE_SECRET_KEY
-                                                                                                                                                  sync: false
-                                                                                                                                                        - key: LANGFUSE_HOST
-                                                                                                                                                                value: https://cloud.langfuse.com
-                                                                                                                                                                      - key: OPENAI_API_KEY
-                                                                                                                                                                              sync: false
-                                                                                                                                                                                    - key: ANTHROPIC_API_KEY
-                                                                                                                                                                                            sync: false
-                                                                                                                                                                                                  - key: ENV
-                                                                                                                                                                                                          value: production
-                                                                                                                                                                                                                - key: LANGFUSE_ENVIRONMENT
-                                                                                                                                                                                                                        value: production
-                                                                                                                                                                                                                        
-                                                                                                                                                                                                                        services:
-                                                                                                                                                                                                                          # Backend FastAPI Service
-                                                                                                                                                                                                                            - type: web
-                                                                                                                                                                                                                                name: nexus-backend
-                                                                                                                                                                                                                                    env: docker
-                                                                                                                                                                                                                                        plan: standard # 2GB RAM required for AI models and PDF processing
-                                                                                                                                                                                                                                            region: ohio
-                                                                                                                                                                                                                                                dockerContext: .
-                                                                                                                                                                                                                                                    dockerfilePath: ./Dockerfile
-                                                                                                                                                                                                                                                        healthCheckPath: /api/health
-                                                                                                                                                                                                                                                            envVars:
-                                                                                                                                                                                                                                                                  - key: PORT
-                                                                                                                                                                                                                                                                          value: 8000
-                                                                                                                                                                                                                                                                                - fromGroup: nexus-secrets
-                                                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                                  # Frontend Next.js Service
-                                                                                                                                                                                                                                                                                    - type: web
-                                                                                                                                                                                                                                                                                        name: nexus-frontend
-                                                                                                                                                                                                                                                                                            env: node
-                                                                                                                                                                                                                                                                                                plan: starter
-                                                                                                                                                                                                                                                                                                    region: ohio
-                                                                                                                                                                                                                                                                                                        rootDir: frontend
-                                                                                                                                                                                                                                                                                                            buildCommand: npm install && npm run build
-                                                                                                                                                                                                                                                                                                                startCommand: npm start
-                                                                                                                                                                                                                                                                                                                    envVars:
-                                                                                                                                                                                                                                                                                                                          - key: NEXT_PUBLIC_API_URL
-                                                                                                                                                                                                                                                                                                                                  fromService:
-                                                                                                                                                                                                                                                                                                                                            type: web
-                                                                                                                                                                                                                                                                                                                                                      name: nexus-backend
-                                                                                                                                                                                                                                                                                                                                                                property: host
-                                                                                                                                                                                                                                                                                                                                                                      - key: NODE_VERSION
-                                                                                                                                                                                                                                                                                                                                                                              value: 20
-                                                                                                                                                                                                                                                                                                                                                                                    - key: NODE_ENV
-                                                                                                                                                                                                                                                                                                                                                                                            value: production
-                                                                                                                                                                                                                                                                                                                                                                                            
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_HOST
+        value: https://cloud.langfuse.com
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ENV
+        value: production
+      - key: LANGFUSE_ENVIRONMENT
+        value: production
+
+services:
+  # Backend FastAPI Service
+  - type: web
+    name: nexus-backend
+    env: docker
+    plan: standard # 2GB RAM required for AI models and PDF processing
+    region: ohio
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 8000
+      - fromGroup: nexus-secrets
+
+  # Frontend Next.js Service
+  - type: web
+    name: nexus-frontend
+    env: node
+    plan: starter
+    region: ohio
+    rootDirectory: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: nexus-backend
+          property: url
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
