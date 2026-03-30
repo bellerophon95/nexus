@@ -21,8 +21,8 @@ ENV PATH="/root/.local/bin:$PATH"
 # Copy project files
 COPY pyproject.toml poetry.lock* ./
 
-# Install dependencies directly from pyproject.toml
-# This bypasses the Poetry solver loops often occurring on Render
+# Create minimal package structure to satisfy build-backend
+RUN mkdir -p backend && touch backend/__init__.py
 RUN pip install .
 
 # Pre-download ML models for stability and speed

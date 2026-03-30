@@ -3,6 +3,7 @@ name = "nexus"
 version = "0.1.0"
 description = "Project Nexus AI Foundation"
 authors = ["Vibhor Kashmira"]
+packages = [{ include = "backend" }]
 
 [tool.poetry.dependencies]
 python = "^3.12"
