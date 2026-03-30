@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 import asyncio
+import logging
 from typing import Optional
 
 # Load environment variables before any other imports
@@ -10,6 +11,8 @@ load_dotenv()
 from backend.config import settings
 from backend.api import routes_health, routes_ingest, routes_search, routes_agents, routes_query, routes_documents, routes_history, routes_tasks
 from backend.api.middleware import RequestContextMiddleware
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -47,30 +50,25 @@ app.include_router(routes_tasks.router, prefix="/api", tags=["Tasks"])
 
 @app.on_event("startup")
 async def startup_event():
+    """
+    Consolidated startup: Initialize tracing, validate config, and set storage.
+    Heavy ML models are lazy-loaded on first request for 512MB RAM compatibility.
+    """
     print(f"--- {settings.APP_NAME} Startup ---")
-    print(f"Environment: {settings.ENV}")
-    print(f"Debug Mode: {settings.DEBUG}")
     
-    # Check for missing critical configuration
-    missing = settings.validate_config()
-    if missing:
-        print(f"WARNING: Missing critical variables: {', '.join(missing)}")
-        print("The application may fail during RAG operations.")
-    else:
-        print("All critical configuration variables are present.")
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Lean startup: Initialize only the bare essentials (tracing, local storage).
-    Heavy ML models are lazy-loaded on first request to stay within 512MB RAM.
-    """
     from backend.observability.tracing import init_tracing
     init_tracing()
     
     # Ensure local storage exists
     os.makedirs(settings.LOCAL_STORAGE_PATH, exist_ok=True)
     
+    # Configuration check
+    missing = settings.validate_config()
+    if missing:
+        logger.warning(f"Missing configuration: {', '.join(missing)}")
+    else:
+        logger.info("All critical configuration variables are present.")
+        
     logger.info(f"Nexus Backend started in {settings.ENV} mode (Plan: Free Tier Optimized)")
 
 @app.on_event("shutdown")
