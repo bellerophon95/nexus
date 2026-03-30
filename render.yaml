@@ -59,10 +59,7 @@ services:
     startCommand: npm start
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: nexus-backend
-          property: url
+        value: https://nexus-backend-bkne.onrender.com
       - key: NODE_VERSION
         value: 20
       - key: NODE_ENV
