@@ -2,8 +2,7 @@ import asyncio
 import logging
 import re
 from typing import List, Optional
-from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
-from presidio_anonymizer import AnonymizerEngine
+from backend.config import settings
 from better_profanity import profanity
 from backend.guardrails.models import GuardResult
 from backend.observability.tracing import observe
@@ -15,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # 1. Custom Password Recognizer
 # Catches common "password is X" patterns
+from presidio_analyzer import PatternRecognizer, Pattern
 password_pattern = Pattern(
     name="password_pattern",
     regex=r"(?i)(password|pwd|passphrase|secret)\s*(is|:|=)\s*([^\s,.]+)",
@@ -30,21 +30,31 @@ _analyzer = None
 _anonymizer = None
 
 def get_analyzer():
+    """
+    Lazy loader for Presidio AnalyzerEngine to fit in 512MB RAM.
+    """
     global _analyzer
     if _analyzer is None:
+        from presidio_analyzer import AnalyzerEngine
         try:
             # Force small model for 512MB RAM compatibility
             _analyzer = AnalyzerEngine(default_score_threshold=0.4)
             # Ensure it's using 'en_core_web_sm' if available
             _analyzer.registry.add_recognizer(password_recognizer)
-            logger.info("Presidio Analyzer initialized with optimized memory model.")
+            logger.info("Presidio AnalyzerEngine initialized with en_core_web_sm.")
         except Exception as e:
             logger.error(f"Failed to initialize Presidio Analyzer: {e}")
+            # Fallback or re-raise? Raising is safer for security.
+            raise
     return _analyzer
 
 def get_anonymizer():
+    """
+    Lazy loader for Presidio AnonymizerEngine.
+    """
     global _anonymizer
     if _anonymizer is None:
+        from presidio_anonymizer import AnonymizerEngine
         try:
             _anonymizer = AnonymizerEngine()
         except Exception as e:

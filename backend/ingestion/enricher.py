@@ -1,5 +1,3 @@
-import spacy
-import yake
 from typing import List, Dict, Any, Tuple
 import logging
 from backend.observability.tracing import observe
@@ -14,6 +12,7 @@ def get_enricher_resources():
     global _nlp, _kw_extractor
     if _nlp is None:
         try:
+            import spacy
             # We only need the NER component for efficiency if we want, 
             # but usually en_core_web_sm is fast enough.
             _nlp = spacy.load("en_core_web_sm")
@@ -22,6 +21,7 @@ def get_enricher_resources():
             raise
     if _kw_extractor is None:
         try:
+            import yake
             # YAKE parameters
             _kw_extractor = yake.KeywordExtractor(
                 lan="en", 

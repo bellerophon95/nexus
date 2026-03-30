@@ -1,4 +1,3 @@
-from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
 import numpy as np
 from collections import Counter
@@ -15,6 +14,7 @@ def get_embedder_model():
     global _model
     if _model is None:
         try:
+            from sentence_transformers import SentenceTransformer
             # Consistent model with the chunker
             _model = SentenceTransformer('all-MiniLM-L6-v2')
         except Exception as e:

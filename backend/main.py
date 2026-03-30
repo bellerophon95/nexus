@@ -58,19 +58,20 @@ async def startup_event():
         print("The application may fail during RAG operations.")
     else:
         print("All critical configuration variables are present.")
-        
-    # Masked diagnostic info for Render logs
-    def mask(val: Optional[str]) -> str:
-        return f"{val[:6]}...{val[-4:]}" if val and len(val) > 10 else "MISSING"
-    
-    print(f"SUPABASE_URL: {'SET' if settings.SUPABASE_URL else 'MISSING'} ({mask(settings.SUPABASE_URL)})")
-    print(f"OPENAI_API_KEY: {'SET' if settings.OPENAI_API_KEY else 'MISSING'}")
-    print("--------------------------------")
 
-    # Warm up guardrail models in background to prevent first-request hang
-    from backend.guardrails.input_guard import warmup_guardrails
-    loop = asyncio.get_running_loop()
-    loop.create_task(warmup_guardrails())
+@app.on_event("startup")
+async def startup_event():
+    """
+    Lean startup: Initialize only the bare essentials (tracing, local storage).
+    Heavy ML models are lazy-loaded on first request to stay within 512MB RAM.
+    """
+    from backend.observability.tracing import init_tracing
+    init_tracing()
+    
+    # Ensure local storage exists
+    os.makedirs(settings.LOCAL_STORAGE_PATH, exist_ok=True)
+    
+    logger.info(f"Nexus Backend started in {settings.ENV} mode (Plan: Free Tier Optimized)")
 
 @app.on_event("shutdown")
 async def shutdown_event():

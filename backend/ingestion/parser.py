@@ -1,8 +1,6 @@
 import os
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
-from unstructured.partition.auto import partition
-from unstructured.documents.elements import Table, Element
 from backend.observability.tracing import observe
 from pypdf import PdfReader
 import logging
@@ -109,6 +107,10 @@ def parse_document(file_path: str, progress_callback: Optional[Callable[[float],
             logger.warning(f"Fast PDF extraction failed, falling back to unstructured: {e}")
 
     # 3. Standard path (unstructured.io) for complex/small files
+    # LAZY IMPORT to save 512MB RAM on startup
+    from unstructured.partition.auto import partition
+    from unstructured.documents.elements import Table
+
     strategy = "fast" if file_size > 2 * 1024 * 1024 else "auto"
     logger.info(f"Partitioning {file_path} with strategy={strategy} (Size: {file_size/1024/1024:.2f}MB)")
     
