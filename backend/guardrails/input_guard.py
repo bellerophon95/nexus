@@ -2,32 +2,15 @@ import asyncio
 import logging
 import re
 from typing import List, Optional
-from backend.config import settings
-from better_profanity import profanity
 from backend.guardrails.models import GuardResult
 from backend.observability.tracing import observe
 
 logger = logging.getLogger(__name__)
 
-# No-op module-level loading to prevent backend startup hangs
-# profanity.load_censor_words() <- Moved to warmup
-
-# 1. Custom Password Recognizer
-# Catches common "password is X" patterns
-from presidio_analyzer import PatternRecognizer, Pattern
-password_pattern = Pattern(
-    name="password_pattern",
-    regex=r"(?i)(password|pwd|passphrase|secret)\s*(is|:|=)\s*([^\s,.]+)",
-    score=0.8
-)
-password_recognizer = PatternRecognizer(
-    supported_entity="PASSWORD", 
-    patterns=[password_pattern]
-)
-
-# Lazily initialize Presidio to prevent blocking imports
+# Lazily initialize Presidio and Profanity to prevent blocking imports
 _analyzer = None
 _anonymizer = None
+_profanity_loaded = False
 
 def get_analyzer():
     """
@@ -35,16 +18,25 @@ def get_analyzer():
     """
     global _analyzer
     if _analyzer is None:
-        from presidio_analyzer import AnalyzerEngine
         try:
-            # Force small model for 512MB RAM compatibility
+            from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
+            
+            # 1. Custom Password Recognizer
+            password_pattern = Pattern(
+                name="password_pattern",
+                regex=r"(?i)(password|pwd|passphrase|secret)\s*(is|:|=)\s*([^\s,.]+)",
+                score=0.8
+            )
+            password_recognizer = PatternRecognizer(
+                supported_entity="PASSWORD", 
+                patterns=[password_pattern]
+            )
+            
             _analyzer = AnalyzerEngine(default_score_threshold=0.4)
-            # Ensure it's using 'en_core_web_sm' if available
             _analyzer.registry.add_recognizer(password_recognizer)
-            logger.info("Presidio AnalyzerEngine initialized with en_core_web_sm.")
+            logger.info("Presidio AnalyzerEngine initialized.")
         except Exception as e:
             logger.error(f"Failed to initialize Presidio Analyzer: {e}")
-            # Fallback or re-raise? Raising is safer for security.
             raise
     return _analyzer
 
@@ -63,21 +55,36 @@ def get_anonymizer():
 
 async def warmup_guardrails():
     """Warms up NLP models to prevent first-request latency."""
+    global _profanity_loaded
     from backend.config import settings
     logger.info(f"Warming up guardrail models (Env: {settings.ENV})...")
     
-    if settings.ENV == "development":
-        logger.info("Fast Mode: Skipping heavy NLP warmup for Presidio.")
-    else:
+    if settings.ENV != "development":
         # Only do heavy lifting in production (runs in a thread to keep loop free)
         await asyncio.to_thread(get_analyzer)
         await asyncio.to_thread(get_anonymizer)
     
     # Configure profanity with technical whitelist (Fast across all envs)
-    whitelist = ["dummy", "mock", "stub", "lorem", "ipsum", "test", "demo"]
-    profanity.load_censor_words(whitelist_words=whitelist)
+    if not _profanity_loaded:
+        try:
+            from better_profanity import profanity
+            whitelist = ["dummy", "mock", "stub", "lorem", "ipsum", "test", "demo"]
+            profanity.load_censor_words(whitelist_words=whitelist)
+            _profanity_loaded = True
+        except Exception as e:
+            logger.error(f"Failed to load profanity words: {e}")
     
     logger.info("Guardrail models warmed up.")
+
+def get_profanity():
+    """Lazy loader for better_profanity."""
+    global _profanity_loaded
+    from better_profanity import profanity
+    if not _profanity_loaded:
+        whitelist = ["dummy", "mock", "stub", "lorem", "ipsum", "test", "demo"]
+        profanity.load_censor_words(whitelist_words=whitelist)
+        _profanity_loaded = True
+    return profanity
 
 # Prompt Injection Patterns (Lightweight ReAct/Regex style)
 INJECTION_PATTERNS = [
@@ -99,7 +106,7 @@ def run_input_guardrails(query: str) -> GuardResult:
     from backend.config import settings
     
     # 1. Profanity Check (Fast)
-    # The wordlist is already loaded during warmup in main.py
+    profanity = get_profanity()
     if profanity.contains_profanity(query):
         logger.warning(f"Profanity detected in query: {query[:50]}...")
         return GuardResult(

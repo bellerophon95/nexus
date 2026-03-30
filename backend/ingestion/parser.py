@@ -2,7 +2,6 @@ import os
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
 from backend.observability.tracing import observe
-from pypdf import PdfReader
 import logging
 
 logger = logging.getLogger(__name__)
@@ -42,6 +41,7 @@ def _fast_pdf_parser(file_path: str, progress_callback: Optional[Callable[[float
     """
     Extracts text from PDF page by page using pypdf for maximum speed on massive files.
     """
+    from pypdf import PdfReader
     logger.info(f"Using Super Fast PDF extraction for {file_path}")
     reader = PdfReader(file_path)
     num_pages = len(reader.pages)

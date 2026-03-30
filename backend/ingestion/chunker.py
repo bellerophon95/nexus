@@ -1,7 +1,4 @@
-import spacy
-from sentence_transformers import SentenceTransformer
 import numpy as np
-import tiktoken
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
 import logging
@@ -17,6 +14,8 @@ class Chunk:
     metadata: Dict[str, Any]
 
 # Lazy loading of models to avoid overhead on import
+_nlp = None
+_model = None
 _tokenizer = None
 
 def _hard_split_text(text: str, max_chars: int) -> List[str]:
@@ -29,6 +28,7 @@ def get_resources():
     global _nlp, _model, _tokenizer
     if _nlp is None:
         try:
+            import spacy
             # Use a blank "en" model with a sentencizer for maximum speed/reliability
             _nlp = spacy.blank("en")
             _nlp.add_pipe("sentencizer")
@@ -39,12 +39,14 @@ def get_resources():
             raise
     if _model is None:
         try:
+            from sentence_transformers import SentenceTransformer
             _model = SentenceTransformer('all-MiniLM-L6-v2')
         except Exception as e:
             logger.error(f"Failed to load SentenceTransformer: {e}")
             raise
     if _tokenizer is None:
         try:
+            import tiktoken
             _tokenizer = tiktoken.get_encoding("cl100k_base")
         except Exception as e:
             logger.error(f"Failed to load tiktoken encoding: {e}")
