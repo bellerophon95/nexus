@@ -20,16 +20,10 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# CORS - Explicit origins required when allow_credentials=True
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://35.16.25.121:3000",
-]
-
+# CORS - Open for Render services with credential support
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origin_regex=r"https?://.*\.onrender\.com|http://localhost:.*|http://127\.0\.0\.1:.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
