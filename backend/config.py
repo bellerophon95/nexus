@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     # Supabase Settings
-    SUPABASE_URL: str
-    SUPABASE_ANON_KEY: str
-    SUPABASE_SERVICE_ROLE_KEY: str
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_ANON_KEY: Optional[str] = None
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
     
     # Database Settings
     DATABASE_URL: Optional[str] = None
