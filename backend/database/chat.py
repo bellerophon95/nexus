@@ -2,7 +2,7 @@ import logging
 import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from backend.database.supabase import supabase
+from backend.database.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ async def create_conversation(title: str) -> str:
             "updated_at": datetime.utcnow().isoformat()
         }
         result = await asyncio.to_thread(
-            lambda: supabase.table("conversations").insert(data).execute()
+            lambda: get_supabase().table("conversations").insert(data).execute()
         )
         if result.data:
             return result.data[0]["id"]

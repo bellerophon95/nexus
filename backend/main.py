@@ -47,10 +47,28 @@ app.include_router(routes_tasks.router, prefix="/api", tags=["Tasks"])
 
 @app.on_event("startup")
 async def startup_event():
-    print(f"Starting {settings.APP_NAME} in {settings.ENV} mode")
+    print(f"--- {settings.APP_NAME} Startup ---")
+    print(f"Environment: {settings.ENV}")
+    print(f"Debug Mode: {settings.DEBUG}")
+    
+    # Check for missing critical configuration
+    missing = settings.validate_config()
+    if missing:
+        print(f"WARNING: Missing critical variables: {', '.join(missing)}")
+        print("The application may fail during RAG operations.")
+    else:
+        print("All critical configuration variables are present.")
+        
+    # Masked diagnostic info for Render logs
+    def mask(val: Optional[str]) -> str:
+        return f"{val[:6]}...{val[-4:]}" if val and len(val) > 10 else "MISSING"
+    
+    print(f"SUPABASE_URL: {'SET' if settings.SUPABASE_URL else 'MISSING'} ({mask(settings.SUPABASE_URL)})")
+    print(f"OPENAI_API_KEY: {'SET' if settings.OPENAI_API_KEY else 'MISSING'}")
+    print("--------------------------------")
+
     # Warm up guardrail models in background to prevent first-request hang
     from backend.guardrails.input_guard import warmup_guardrails
-    # Explicitly ensure loop is running
     loop = asyncio.get_running_loop()
     loop.create_task(warmup_guardrails())
 

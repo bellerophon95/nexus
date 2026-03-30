@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from backend.database.supabase import supabase
+from backend.database.supabase import get_supabase
 import logging
 from backend.observability.tracing import observe
 
@@ -26,7 +26,7 @@ def upsert_document(
         }
         
         # Upsert based on fingerprint uniqueness
-        response = supabase.table("documents").upsert(
+        response = get_supabase().table("documents").upsert(
             data, 
             on_conflict="fingerprint"
         ).execute()
@@ -68,7 +68,7 @@ def insert_chunks(document_id: str, chunks_data: List[Dict[str, Any]]):
             return
 
         # Batch insert
-        response = supabase.table("chunks").insert(payload).execute()
+        response = get_supabase().table("chunks").insert(payload).execute()
         
         if not response.data:
             logger.error(f"Supabase chunk insert returned no data: {response}")

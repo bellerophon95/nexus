@@ -1,9 +1,10 @@
 import json
 import asyncio
 import logging
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Depends
 from fastapi.responses import StreamingResponse
 from typing import AsyncGenerator, Optional, List, Dict, Any
+from backend.api.security import rate_limit_dependency
 
 from backend.cache.semantic_cache import get_semantic_cache
 from backend.retrieval.searcher import search_knowledge_base
@@ -23,6 +24,7 @@ async def query_streaming(
     request: Request, 
     q: str = Query(...),
     conversation_id: Optional[str] = Query(None),
+    _ = Depends(rate_limit_dependency)
 ):
     """
     Main entry point for streaming queries. 

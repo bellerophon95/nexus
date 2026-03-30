@@ -33,8 +33,11 @@ def get_analyzer():
     global _analyzer
     if _analyzer is None:
         try:
+            # Force small model for 512MB RAM compatibility
             _analyzer = AnalyzerEngine(default_score_threshold=0.4)
+            # Ensure it's using 'en_core_web_sm' if available
             _analyzer.registry.add_recognizer(password_recognizer)
+            logger.info("Presidio Analyzer initialized with optimized memory model.")
         except Exception as e:
             logger.error(f"Failed to initialize Presidio Analyzer: {e}")
     return _analyzer

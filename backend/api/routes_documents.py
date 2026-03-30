@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
-from backend.database.supabase import supabase
+from backend.database.supabase import get_supabase
 from backend.observability.tracing import observe
 import logging
 
@@ -14,7 +14,7 @@ def list_documents():
     Fetches all documents from the library.
     """
     try:
-        response = supabase.table("documents").select("*").order("created_at", desc=True).execute()
+        response = get_supabase().table("documents").select("*").order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
         logger.error(f"Failed to fetch documents: {e}")

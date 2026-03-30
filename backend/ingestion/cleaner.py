@@ -3,7 +3,7 @@ import re
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 import hashlib
-from backend.database.supabase import supabase
+from backend.database.supabase import get_supabase
 from backend.observability.tracing import observe
 
 @dataclass
@@ -31,7 +31,7 @@ def check_duplicate(fingerprint: int) -> bool:
     Checks if a document with a similar fingerprint already exists in Supabase.
     """
     try:
-        response = supabase.table("documents").select("id").eq("fingerprint", fingerprint).execute()
+        response = get_supabase().table("documents").select("id").eq("fingerprint", fingerprint).execute()
         return len(response.data) > 0
     except Exception:
         return False

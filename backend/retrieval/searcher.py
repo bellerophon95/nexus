@@ -1,6 +1,6 @@
 import logging
 from typing import List, Dict, Any, Optional
-from backend.database.supabase import supabase
+from backend.database.supabase import get_supabase
 from backend.ingestion.embedder import generate_dense_embedding
 from backend.retrieval.reranker import rerank_results
 from backend.observability.tracing import observe
@@ -28,7 +28,7 @@ def search_knowledge_base(
         # match_count is high so we have enough candidates for reranking
         match_count = limit * 2 if rerank else limit
         
-        response = supabase.rpc(
+        response = get_supabase().rpc(
             "match_hybrid_chunks",
             {
                 "query_embedding": query_embedding,

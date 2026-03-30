@@ -1,4 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends
+from backend.api.security import rate_limit_dependency
 from pydantic import BaseModel, Field
 from typing import Optional, Dict
 import shutil
@@ -8,7 +9,7 @@ import logging
 import asyncio
 from backend.ingestion.pipeline import run_ingestion_pipeline
 from backend.cache.semantic_cache import get_semantic_cache
-from backend.database.supabase import supabase, get_async_supabase
+from backend.database.supabase import get_supabase, get_async_supabase
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -35,7 +36,7 @@ def process_ingestion_task(task_id: str, file_path: str, filename: str):
     Uses synchronous Supabase client for thread safety and to match pipeline IO.
     """
     try:
-        supabase.table("ingestion_tasks").update({
+        get_supabase().table("ingestion_tasks").update({
             "status": "processing",
             "progress": 2.0
         }).eq("id", task_id).execute()
@@ -53,14 +54,14 @@ def process_ingestion_task(task_id: str, file_path: str, filename: str):
         result = run_ingestion_pipeline(file_path, title=filename, progress_callback=update_progress)
         
         if result["status"] == "error":
-            supabase.table("ingestion_tasks").update({
+            get_supabase().table("ingestion_tasks").update({
                 "status": "error",
                 "message": result.get("message", "Unknown pipeline error")
             }).eq("id", task_id).execute()
             return
 
         if result["status"] == "skipped":
-            supabase.table("ingestion_tasks").update({
+            get_supabase().table("ingestion_tasks").update({
                 "status": "skipped",
                 "message": "Document already exists."
             }).eq("id", task_id).execute()
@@ -69,7 +70,7 @@ def process_ingestion_task(task_id: str, file_path: str, filename: str):
         if result["status"] == "success":
             # Invalidate any cache entries for this document
             get_semantic_cache().invalidate_for_documents([result["document_id"]])
-            supabase.table("ingestion_tasks").update({
+            get_supabase().table("ingestion_tasks").update({
                 "status": "completed",
                 "progress": 100.0,
                 "document_id": result["document_id"],
@@ -80,7 +81,7 @@ def process_ingestion_task(task_id: str, file_path: str, filename: str):
     except Exception as e:
         logger.error(f"Ingestion task {task_id} failed: {e}")
         try:
-            supabase.table("ingestion_tasks").update({
+            get_supabase().table("ingestion_tasks").update({
                 "status": "error",
                 "message": str(e)
             }).eq("id", task_id).execute()
@@ -88,7 +89,11 @@ def process_ingestion_task(task_id: str, file_path: str, filename: str):
             logger.error(f"Could not even update error status for task {task_id}: {inner_e}")
 
 @router.post("/ingest", response_model=IngestResponse)
-async def ingest_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def ingest_file(
+    background_tasks: BackgroundTasks, 
+    file: UploadFile = File(...),
+    _ = Depends(rate_limit_dependency)
+):
     """
     Ingests a document through the pipeline asynchronously.
     """

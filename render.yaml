@@ -37,7 +37,7 @@ services:
   - type: web
     name: nexus-backend
     env: docker
-    plan: standard # 2GB RAM required for AI models and PDF processing
+    plan: free # 512MB RAM limit - optimized for spin-down (dormant mode)
     region: ohio
     dockerContext: .
     dockerfilePath: ./Dockerfile
@@ -51,7 +51,7 @@ services:
   - type: web
     name: nexus-frontend
     env: node
-    plan: starter
+    plan: free
     region: ohio
     rootDir: frontend
     buildCommand: npm install && npm run build
