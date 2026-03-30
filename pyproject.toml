@@ -15,7 +15,7 @@ supabase = "^2.13"
 upstash-redis = "^1.2"
 langfuse = "^2.55"
 python-dotenv = "^1.0"
-unstructured = {extras = ["pdf"], version = "^0.15", python = ">=3.12,<4.0"}
+unstructured = {extras = ["pdf"], version = "^0.15", python = ""}
 simhash = "^2.0"
 sentence-transformers = "^3.0"
 tiktoken = "^0.7"
