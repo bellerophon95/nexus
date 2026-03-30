@@ -29,5 +29,13 @@ def get_langfuse_client():
 # Export for convenience, but favor get_langfuse_client() for safety
 langfuse = None # Placeholder, will be set on first call to get_langfuse_client if needed
 
+def init_tracing():
+    """Formally register tracing initialization for startup events."""
+    if not settings.LANGFUSE_PUBLIC_KEY or not settings.LANGFUSE_SECRET_KEY:
+        logger.warning("Langfuse credentials missing. Tracing may be disabled.")
+    else:
+        logger.info("Langfuse Tracing initialized.")
+    return True
+
 # Export observe decorator for convenience
-__all__ = ["observe", "get_langfuse_client", "langfuse"]
+__all__ = ["observe", "get_langfuse_client", "langfuse", "init_tracing"]
