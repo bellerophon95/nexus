@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # Security/Abuse Prevention (Dormant Mode)
     RATE_LIMIT_PER_MINUTE: int = 20 # Protect against abuse on Free tier
     
+    # Storage Settings
+    LOCAL_STORAGE_PATH: str = os.path.join(os.getcwd(), "storage")
+    
     model_config = SettingsConfigDict(
         env_file=".env", 
         env_file_encoding="utf-8",
