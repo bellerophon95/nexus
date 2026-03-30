@@ -4,6 +4,7 @@ import { Upload, File, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { API_BASE_URL } from "@/lib/constants";
 
 interface UploadPanelProps {
   onUploadSuccess?: (docId: string, chunks: number) => void;
@@ -39,7 +40,7 @@ export function UploadPanel({ onUploadSuccess }: UploadPanelProps) {
 
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/ingest/status/${taskId}`);
+        const response = await fetch(`${API_BASE_URL}/api/ingest/status/${taskId}`);
         
         if (response.status === 404) {
           clearInterval(pollInterval);
@@ -97,7 +98,7 @@ export function UploadPanel({ onUploadSuccess }: UploadPanelProps) {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/ingest", {
+      const response = await fetch(`${API_BASE_URL}/api/ingest`, {
         method: "POST",
         body: formData,
       });

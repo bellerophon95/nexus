@@ -84,8 +84,8 @@ export function ChatInterface({
       eventSourceRef.current.close();
     }
 
-    // Connect to SSE endpoint (Use 127.0.0.1 to avoid IPv6 resolution issues in local dev)
-    let url = `http://127.0.0.1:8000/api/query?q=${encodeURIComponent(input)}`;
+    // Connect to SSE endpoint (Uses API_BASE_URL for production compatibility)
+    let url = `${API_BASE_URL}/api/query?q=${encodeURIComponent(input)}`;
     if (conversationId) {
       url += `&conversation_id=${conversationId}`;
     }
