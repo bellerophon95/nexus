@@ -16,7 +16,18 @@ export function UploadPanel({ onUploadSuccess }: UploadPanelProps) {
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState("");
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
+    if (fileRejections.length > 0) {
+      setStatus("error");
+      const rejection = fileRejections[0];
+      if (rejection.errors[0]?.code === "file-too-large") {
+        setMessage("File too large. Max limit is 10MB for the Free Tier.");
+      } else {
+        setMessage(rejection.errors[0]?.message || "File rejected.");
+      }
+      return;
+    }
+
     if (acceptedFiles.length > 0) {
       setFile(acceptedFiles[0]);
       setStatus("idle");
@@ -31,6 +42,7 @@ export function UploadPanel({ onUploadSuccess }: UploadPanelProps) {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
       "text/html": [".html"],
     },
+    maxSize: 10 * 1024 * 1024, // 10MB
     multiple: false,
   });
 
@@ -104,7 +116,16 @@ export function UploadPanel({ onUploadSuccess }: UploadPanelProps) {
       });
 
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+        if (response.status === 413) {
+           throw new Error("File too large for the current system limits (Max 10MB).");
+        }
+        
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || `Upload failed: ${response.statusText}`);
+        } catch (e) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+        }
       }
 
       const result = await response.json();
@@ -150,7 +171,7 @@ export function UploadPanel({ onUploadSuccess }: UploadPanelProps) {
           <p className="mt-4 text-xs font-medium text-slate-400 group-hover:text-slate-300">
             {isDragActive ? "Drop the file here" : "Drag & drop PDF, DOCX, or HTML"}
           </p>
-          <p className="mt-1 text-[10px] text-slate-600">Max size: 100MB</p>
+          <p className="mt-1 text-[10px] text-slate-600">Max size: 10MB (Free Tier Optimization)</p>
         </div>
       ) : (
         <div className="space-y-4">

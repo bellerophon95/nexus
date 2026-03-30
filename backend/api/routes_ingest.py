@@ -96,8 +96,24 @@ async def ingest_file(
 ):
     """
     Ingests a document through the pipeline asynchronously.
+    Enforces a 10MB limit to prevent OOM on Render Free Tier.
     """
+    MAX_FILE_SIZE = 10 * 1024 * 1024 # 10MB
+    
     try:
+        # 1. Quick size check before saving to disk
+        # Note: We take a slice to check size if the spooling didn't do it yet
+        file.file.seek(0, os.SEEK_END)
+        size = file.file.tell()
+        file.file.seek(0)
+        
+        if size > MAX_FILE_SIZE:
+            logger.warning(f"File upload rejected: {file.filename} is {(size/1024/1024):.2f}MB (Max 10MB)")
+            raise HTTPException(
+                status_code=413, 
+                detail=f"File too large ({(size/1024/1024):.1f}MB). The Free Tier limit is 10MB to prevent system instability."
+            )
+
         task_id = str(uuid.uuid4())
         async_supabase = await get_async_supabase()
         
@@ -133,9 +149,20 @@ async def ingest_file(
             message=f"Ingestion started for {file.filename}. Check status with task_id: {task_id}"
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
+        error_msg = str(e)
+        # Check specifically for Supabase 401/403 (Configuration Issues)
+        if "401" in error_msg or "Invalid API key" in error_msg:
+            logger.critical(f"SUPABASE CONFIG FAILURE: {error_msg}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Backend configuration error: Invalid Supabase API Keys. Please check Render Environment Variables."
+            )
+            
         logger.error(f"Failed to start ingestion: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=error_msg)
 @router.get("/ingest/status/{task_id}")
 async def get_ingest_status(task_id: str):
     """

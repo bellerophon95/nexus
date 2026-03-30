@@ -69,8 +69,7 @@ class Settings(BaseSettings):
 
     def validate_config(self):
         """
-        Validates that critical settings are present, especially in production.
-        Identifies missing secrets that will cause runtime failures.
+        Validates that critical settings are present and not placeholders.
         """
         critical_vars = {
             "SUPABASE_URL": self.SUPABASE_URL,
@@ -79,18 +78,23 @@ class Settings(BaseSettings):
         }
         
         missing = [k for k, v in critical_vars.items() if not v]
+        placeholders = [k for k, v in critical_vars.items() if v and ("YOUR_" in v or "INSERT_" in v)]
         
         if missing:
             msg = f"CRITICAL CONFIG MISSING: {', '.join(missing)}"
             if self.ENV == "production":
                 logger.error(msg)
-                # We don't raise here to allow the app to start and serve a health check
-                # so the user can see the logs on Render.
             else:
                 logger.warning(msg)
-        else:
-            logger.info("Critical configuration validated successfully.")
+        
+        if placeholders:
+            msg = f"PLACEHOLDER DETECTED: {', '.join(placeholders)}"
+            logger.error(msg)
             
-        return missing
+        # Additional format check for Supabase Key
+        if self.SUPABASE_SERVICE_ROLE_KEY and len(self.SUPABASE_SERVICE_ROLE_KEY) < 20:
+             logger.error("SUPABASE_SERVICE_ROLE_KEY is suspiciously short. It should be a long JWT.")
+
+        return missing + placeholders
 
 settings = Settings()
