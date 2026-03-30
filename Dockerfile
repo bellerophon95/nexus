@@ -21,9 +21,9 @@ ENV PATH="/root/.local/bin:$PATH"
 # Copy project files
 COPY pyproject.toml poetry.lock* ./
 
-# Install dependencies
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --no-root
+# Install dependencies directly from pyproject.toml
+# This bypasses the Poetry solver loops often occurring on Render
+RUN pip install .
 
 # Pre-download ML models for stability and speed
 # 1. Download spaCy model
