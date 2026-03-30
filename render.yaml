@@ -54,14 +54,15 @@ services:
     plan: free
     region: ohio
     rootDir: frontend
-    buildCommand: npm install && npm run build
+    # Build and Start Commands
+    buildCommand: NODE_OPTIONS="--max-old-space-size=400" npm install && npm run build
     startCommand: npm start
     envVars:
       - key: NEXT_PUBLIC_API_URL
         fromService:
           type: web
           name: nexus-backend
-          property: host
+          property: url
       - key: NODE_VERSION
         value: 20
       - key: NODE_ENV
