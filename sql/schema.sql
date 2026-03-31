@@ -54,6 +54,8 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 AS $$
+DECLARE
+  final_similarity FLOAT;
 BEGIN
   RETURN QUERY
   SELECT
@@ -84,7 +86,13 @@ BEGIN
   JOIN documents ON chunks.document_id = documents.id
   WHERE (
     (1 - (chunks.embedding <=> query_embedding)) * vector_weight +
-    (ts_rank_cd(to_tsvector('english', chunks.text), plainto_tsquery('english', query_text))) * full_text_weight
+    (ts_rank_cd(to_tsvector('english', chunks.text), plainto_tsquery('english', query_text))) * full_text_weight +
+    (CASE 
+        WHEN lower(regexp_replace(documents.title, '\.[^.]+$', '')) = any(string_to_array(lower(query_text), ' ')) THEN title_boost * 2.0
+        WHEN lower(query_text) ILIKE '%' || lower(regexp_replace(documents.title, '\.[^.]+$', '')) || '%' THEN title_boost
+        WHEN lower(regexp_replace(documents.title, '\.[^.]+$', '')) ILIKE '%' || lower(query_text) || '%' THEN title_boost
+        ELSE 0
+    END)
   ) > match_threshold
   ORDER BY similarity DESC
   LIMIT match_count;

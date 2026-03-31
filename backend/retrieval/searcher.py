@@ -12,7 +12,7 @@ def search_knowledge_base(
     query: str, 
     limit: int = 10, 
     rerank: bool = True,
-    match_threshold: float = 0.3
+    match_threshold: float = 0.2
 ) -> List[Dict[str, Any]]:
     """
     Performs a hybrid search (Dense + Sparse) and optionally reranks results.
@@ -26,7 +26,7 @@ def search_knowledge_base(
 
         # 2. Call Supabase RPC for hybrid search
         # match_count is high so we have enough candidates for reranking
-        match_count = limit * 2 if rerank else limit
+        match_count = limit * 3 if rerank else limit
         
         response = get_supabase().rpc(
             "match_hybrid_chunks",
