@@ -34,7 +34,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           cd frontend
-          docker build -t $ECR_REGISTRY/nexus-frontend:latest .
+          docker build --build-arg NEXT_PUBLIC_API_URL=https://${{ secrets.DOMAIN_NAME }} -t $ECR_REGISTRY/nexus-frontend:latest .
           docker push $ECR_REGISTRY/nexus-frontend:latest
           cd ..
 

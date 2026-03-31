@@ -1,8 +1,8 @@
-from typing import Dict, Any, List, Union
-from langgraph.graph import StateGraph, END
-from backend.agents.state import NexusState
-from backend.agents.nodes import supervisor_node, researcher_node, analyst_node, validator_node
 import logging
+from langgraph.graph import END, StateGraph
+
+from backend.agents.nodes import analyst_node, researcher_node, supervisor_node, validator_node
+from backend.agents.state import NexusState
 
 logger = logging.getLogger(__name__)
 
