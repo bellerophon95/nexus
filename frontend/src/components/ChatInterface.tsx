@@ -95,7 +95,24 @@ export function ChatInterface({
 
   useEffect(() => {
     if (initialMessages.length > 0) {
-      setMessages(initialMessages);
+      // Normalize history from DB (snake_case) to Frontend (camelCase)
+      const normalized = initialMessages.map(msg => ({
+        ...msg,
+        agentSteps: msg.agentSteps || (msg as any).agent_steps,
+        citations: msg.citations || (msg as any).citations
+      }));
+      setMessages(normalized);
+      
+      // Auto-populate the sidebar with the latest assistant message's logic/citations
+      const lastAssistant = [...normalized].reverse().find(m => m.role === "assistant");
+      if (lastAssistant) {
+        if (lastAssistant.citations) onCitationsUpdate?.(lastAssistant.citations);
+        if (lastAssistant.agentSteps) {
+            // We need to pass them one by one or as a batch
+            lastAssistant.agentSteps.forEach((step: AgentStep) => onAgentStep?.(step));
+        }
+        if (lastAssistant.metrics) onMetricsUpdate?.(lastAssistant.metrics);
+      }
     } else if (!initialConvId) {
       setMessages([]);
     }

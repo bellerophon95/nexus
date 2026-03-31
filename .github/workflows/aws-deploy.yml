@@ -3,9 +3,44 @@ name: AWS EC2 Deployment
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
+  validate:
+    name: Lint and Test Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest pytest-asyncio httpx fastapi uvicorn pydantic-settings pydantic python-dotenv supabase upstash-redis langfuse requests python-multipart aiohttp pypdf python-magic
+          # Note: We install core dependencies needed for the app to import correctly during tests
+
+      - name: Run Ruff Lint Check
+        run: ruff check backend/
+
+      - name: Run Pytest
+        env:
+          ENV: testing
+          SUPABASE_URL: http://localhost:8000
+          SUPABASE_SERVICE_ROLE_KEY: mock_key
+          OPENAI_API_KEY: sk-mock
+        run: pytest backend/tests/
+
   deploy:
+    name: Build and Deploy to EC2
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -63,7 +98,7 @@ jobs:
           DC_B64=$(base64 -w 0 docker-compose.prod.yml)
           CF_B64=$(base64 -w 0 Caddyfile)
           
-          # Prepare .env content for SSM (robust against heredoc issues)
+          # Prepare .env content for SSM
           ENV_CONTENT="AWS_REGISTRY=$ECR_REGISTRY
           DOMAIN_NAME=$DOMAIN_NAME
           CADDY_EMAIL=$CADDY_EMAIL

@@ -53,10 +53,12 @@ async def save_message(
     content: str,
     citations: List[Dict[str, Any]] = [],
     metrics: Dict[str, Any] = {},
-    trace_id: Optional[str] = None
+    trace_id: Optional[str] = None,
+    agent_steps: List[Dict[str, Any]] = []
 ) -> str:
     """
     Saves a message turn to the database.
+    Now includes agent_steps for persistent Logic/Citations view.
     """
     try:
         data = {
@@ -65,7 +67,8 @@ async def save_message(
             "content": content,
             "citations": citations,
             "metrics": metrics,
-            "trace_id": trace_id
+            "trace_id": trace_id,
+            "agent_steps": agent_steps
         }
         result = await asyncio.to_thread(
             lambda: get_supabase().table("messages").insert(data).execute()

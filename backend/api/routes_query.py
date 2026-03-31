@@ -3,7 +3,7 @@ import asyncio
 import logging
 from fastapi import APIRouter, Query, Request, Depends
 from fastapi.responses import StreamingResponse
-from typing import AsyncGenerator, Union, List, Dict, Any
+from typing import AsyncGenerator, Union, List, Dict, Any, Optional
 from backend.api.security import rate_limit_dependency, get_user_id
 
 from backend.cache.semantic_cache import get_semantic_cache
@@ -45,8 +45,15 @@ async def query_streaming(
     
     async def event_generator() -> AsyncGenerator[str, None]:
         nonlocal current_conv_id
+        captured_steps = []
+        
+        async def yield_agent_step(agent, tool, status):
+            step = {'type': 'agent_step', 'agent': agent, 'tool': tool, 'status': status}
+            captured_steps.append(step)
+            return f"data: {json.dumps(step)}\n\n"
+
         print(f"DEBUG: event_generator starting for query: {q[:20]}")
-        yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Nexus', 'tool': 'Initializing Connection', 'status': 'running'})}\n\n"
+        yield await yield_agent_step('Nexus', 'Initializing Connection', 'running')
         yield f"data: {json.dumps({'type': 'activity', 'node': 'router', 'status': 'Analyzing query intent...', 'status_type': 'running'})}\n\n"
         
         try:
@@ -75,23 +82,24 @@ async def query_streaming(
 
             # Use sanitized content for the rest of the pipeline (PII Anonymized)
             effective_q = guard_result.sanitized_content
-            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Nexus', 'tool': 'Initializing Connection', 'status': 'completed'})}\n\n"
+            yield await yield_agent_step('Nexus', 'Initializing Connection', 'completed')
             yield f"data: {json.dumps({'type': 'activity', 'node': 'router', 'status': 'Query intent analyzed.', 'status_type': 'completed'})}\n\n"
 
             
             # Handle Conversation Persistence
             if not current_conv_id:
-                yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Nexus', 'tool': 'Initializing Thread', 'status': 'running'})}\n\n"
+                yield await yield_agent_step('Nexus', 'Initializing Thread', 'running')
                 title = await generate_title(effective_q)
                 current_conv_id = await create_conversation(title, user_id=user_id)
                 logger.info(f"Created new conversation for user {user_id} with title '{title}': {current_conv_id}")
-                yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Nexus', 'tool': 'Initializing Thread', 'status': 'completed'})}\n\n"
+                yield await yield_agent_step('Nexus', 'Initializing Thread', 'completed')
             
             # Save user message (save the raw query for user history, but effective_q is used for LLM)
             user_msg_id = await save_message(
                 conversation_id=current_conv_id,
                 role="user",
-                content=q
+                content=q,
+                agent_steps=captured_steps.copy() # Capture setup steps for user turn
             )
             # 1. Check Semantic Cache first
             cached = await asyncio.to_thread(get_semantic_cache().get, effective_q)
@@ -129,7 +137,7 @@ async def query_streaming(
                 return
 
             # 2. Cache Miss: Execute RAG Pipeline
-            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Retriever', 'tool': 'Scanning Knowledge Base', 'status': 'running'})}\n\n"
+            yield await yield_agent_step('Retriever', 'Scanning Knowledge Base', 'running')
             yield f"data: {json.dumps({'type': 'activity', 'node': 'retriever', 'status': 'Searching document vector space...', 'status_type': 'running'})}\n\n"
 
             # Fetch context chunks from Knowledge Base (Vector + BM25)
@@ -152,13 +160,13 @@ async def query_streaming(
             
             tier = "rag"
             if not context_chunks:
-                yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Retriever', 'tool': 'No specific documents found. Using General Knowledge.', 'status': 'warning'})}\n\n"
+                yield await yield_agent_step('Retriever', 'No specific documents found. Using General Knowledge.', 'warning')
                 tier = "general"
 
-            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'LLM', 'tool': 'Synthesizing Answer', 'status': 'running'})}\n\n"
+            yield await yield_agent_step('LLM', 'Synthesizing Answer', 'running')
             yield f"data: {json.dumps({'type': 'activity', 'node': 'analyst', 'status': 'Synthesizing grounded response...', 'status_type': 'running'})}\n\n"
             
-            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Retriever', 'tool': 'Scanning Knowledge Base', 'status': 'completed'})}\n\n"
+            yield await yield_agent_step('Retriever', 'Scanning Knowledge Base', 'completed')
             yield f"data: {json.dumps({'type': 'activity', 'node': 'retriever', 'status': 'Search completed.', 'status_type': 'completed'})}\n\n"
             
             # Step 2: Stream Answer Generation
@@ -174,7 +182,7 @@ async def query_streaming(
                 # Small sleep to prevent network buffer issues and allow smooth frontend rendering
                 await asyncio.sleep(0.01)
 
-            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'LLM', 'tool': 'Synthesizing Answer', 'status': 'completed'})}\n\n"
+            yield await yield_agent_step('LLM', 'Synthesizing Answer', 'completed')
             yield f"data: {json.dumps({'type': 'activity', 'node': 'analyst', 'status': 'Response synthesized.', 'status_type': 'completed'})}\n\n"
 
             # Step 3: Format Citations for 'done' event
@@ -192,7 +200,7 @@ async def query_streaming(
                 doc_ids.append(chunk["document_id"])
 
             # Step 4: Post-Stream Evaluation & Metrics (Parallel)
-            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Validator', 'tool': 'Final Quality Check', 'status': 'running'})}\n\n"
+            yield await yield_agent_step('Validator', 'Final Quality Check', 'running')
             
             # Combine context into a single string for the judge
             full_context = "\n---\n".join([c["text"] for c in citations])
@@ -265,7 +273,7 @@ async def query_streaming(
             }
             
             yield f"data: {json.dumps(metrics)}\n\n"
-            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Validator', 'tool': 'Final Quality Check', 'status': 'completed'})}\n\n"
+            yield await yield_agent_step('Validator', 'Final Quality Check', 'completed')
 
             # Step 5: Final 'done' event with metadata
             # WE SEND THIS LAST so the frontend doesn't close too early
@@ -279,7 +287,8 @@ async def query_streaming(
                 content=full_answer,
                 citations=citations,
                 metrics=metrics,
-                trace_id=trace_id
+                trace_id=trace_id,
+                agent_steps=captured_steps # Capture all steps for assistant turn
             )
 
             done_payload = {
@@ -317,7 +326,7 @@ async def query_streaming(
                 "cost": 0.000
             }
             yield f"data: {json.dumps(metrics)}\n\n"
-            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Validator', 'tool': 'Final Quality Check', 'status': 'error'})}\n\n"
+            yield await yield_agent_step('Validator', 'Final Quality Check', 'error')
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     return StreamingResponse(

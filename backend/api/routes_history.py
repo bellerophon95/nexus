@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Request, Depends
 from pydantic import BaseModel, Field
 import uuid
