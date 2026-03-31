@@ -17,6 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     libmagic1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
     poppler-utils \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
