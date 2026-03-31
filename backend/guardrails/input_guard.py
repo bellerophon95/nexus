@@ -7,6 +7,11 @@ from backend.observability.tracing import observe
 
 logger = logging.getLogger(__name__)
 
+# Global variables for lazy initialization
+_analyzer = None
+_anonymizer = None
+_profanity_loaded = False
+
 # Lazily initialize Presidio and Profanity to prevent blocking imports
 def get_analyzer():
     """
@@ -43,8 +48,10 @@ async def warmup_guardrails():
     
     if settings.ENV != "development":
         # Only do heavy lifting in production (runs in a thread to keep loop free)
+        from backend.retrieval.reranker import get_model
         await asyncio.to_thread(get_analyzer)
         await asyncio.to_thread(get_anonymizer)
+        await asyncio.to_thread(get_model)
     
     # Configure profanity with technical whitelist (Fast across all envs)
     if not _profanity_loaded:
