@@ -129,6 +129,16 @@ export function ChatInterface({
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
 
+    eventSource.onerror = (err) => {
+        console.error("SSE Connection Error:", err);
+        setIsLoading(false);
+        setMessages(prev => [
+            ...prev.slice(0, -1),
+            { role: "assistant", content: "⚠️ The Nexus backend is currently experiencing connection issues. Please try again in a few moments." }
+        ]);
+        eventSource.close();
+    };
+
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);

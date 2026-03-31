@@ -3,7 +3,7 @@ import asyncio
 import logging
 from fastapi import APIRouter, Query, Request, Depends
 from fastapi.responses import StreamingResponse
-from typing import AsyncGenerator, Optional, List, Dict, Any
+from typing import AsyncGenerator, Union, List, Dict, Any
 from backend.api.security import rate_limit_dependency, get_user_id
 
 from backend.cache.semantic_cache import get_semantic_cache
@@ -26,7 +26,7 @@ async def query_streaming(
     conversation_id: Optional[str] = Query(None),
     match_threshold: float = Query(0.2),
     rerank: bool = Query(True),
-    user_id: Optional[str] = Depends(get_user_id),
+    user_id: Union[str, None] = Depends(get_user_id),
     _ = Depends(rate_limit_dependency)
 ):
     """

@@ -1,7 +1,7 @@
 import logging
 import time
+from typing import Any, Union
 from fastapi import Request, HTTPException, status, Query
-from typing import Optional
 from upstash_redis import Redis
 from backend.config import settings
 
@@ -63,8 +63,8 @@ async def rate_limit_dependency(request: Request):
 
 async def get_user_id(
     request: Request,
-    user_id_query: Optional[str] = Query(None, alias="user_id")
-) -> Optional[str]:
+    user_id_query: Union[str, None] = Query(None, alias="user_id")
+) -> Union[str, None]:
     """
     Extracts the shadow user ID from the request headers or query params (fallback for SSE).
     Used for session isolation without full login.

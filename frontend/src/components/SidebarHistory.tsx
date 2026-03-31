@@ -36,10 +36,17 @@ export function SidebarHistory({
       const response = await fetch(`${API_BASE_URL}/api/conversations`, {
         headers: getAuthHeaders()
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setConversations(data.conversations || []);
     } catch (err) {
       console.error("Failed to fetch conversations:", err);
+      // Gracefully handle error state
+      setConversations([]);
     } finally {
       setIsLoading(false);
     }
