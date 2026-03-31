@@ -100,4 +100,3 @@ jobs:
               \"docker volume prune -f\"
             ]" \
             --region ${{ secrets.AWS_REGION }}
-            --region ${{ secrets.AWS_REGION }}
