@@ -23,7 +23,7 @@ app = FastAPI(
 # CORS - Open for Render services with credential support
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https?://.*\.onrender\.com|http://localhost:.*|http://127\.0\.0\.1:.*",
+    allow_origin_regex=r"https?://.*\.onrender\.com|https?://.*\.duckdns\.org|http://localhost:.*|http://127\.0\.0\.1:.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,1 +1,1 @@
-export const API_BASE_URL = "https://nexus-backend-bkne.onrender.com";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://project-nexus.duckdns.org";
