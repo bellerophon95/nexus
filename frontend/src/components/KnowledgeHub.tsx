@@ -1,0 +1,79 @@
+"use client";
+
+import React, { useState } from "react";
+import { 
+  Plus, 
+  Library,
+  Layers,
+  Search,
+  Upload
+} from "lucide-react";
+import { DocumentLibrary } from "@/components/DocumentLibrary";
+import { UploadPanel } from "@/components/UploadPanel";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
+export function KnowledgeHub() {
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
+  const handleUploadSuccess = () => {
+    // Increment trigger to refresh DocumentLibrary
+    setRefreshTrigger(prev => prev + 1);
+    // Optionally close the modal after a short delay
+    setTimeout(() => {
+      setIsUploadModalOpen(false);
+    }, 2000);
+  };
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden bg-slate-950">
+      {/* Knowledge Hub Header */}
+      <header className="flex h-20 items-center justify-between border-b border-slate-800/60 bg-slate-900/10 px-8 backdrop-blur-md">
+        <div className="flex items-center gap-4">
+          <div className="h-10 w-10 rounded-xl bg-blue-600/20 flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/10">
+            <Library className="h-6 w-6 text-blue-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-white italic tracking-tight uppercase">Knowledge Base</h1>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Intelligence Grounding Layer</p>
+          </div>
+        </div>
+
+        <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+          <DialogTrigger
+            render={
+              <Button className="bg-blue-600 hover:bg-blue-500 text-white font-bold gap-2 shadow-lg shadow-blue-500/20 px-6">
+                <Plus className="h-4 w-4" />
+                Add Document
+              </Button>
+            }
+          />
+          <DialogContent className="sm:max-w-xl bg-slate-950 border-slate-800 text-slate-200">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-white italic">Ingest Intelligence</DialogTitle>
+              <DialogDescription className="text-slate-500">
+                Upload research papers or documentation to ground your agents with verified facts.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <UploadPanel onUploadSuccess={handleUploadSuccess} showTitle={false} />
+            </div>
+          </DialogContent>
+        </Dialog>
+      </header>
+
+      {/* Library Section */}
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        <DocumentLibrary refreshTrigger={refreshTrigger} showTitle={false} />
+      </div>
+    </div>
+  );
+}

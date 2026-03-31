@@ -8,9 +8,10 @@ import { API_BASE_URL } from "@/lib/constants";
 
 interface UploadPanelProps {
   onUploadSuccess?: (docId: string, chunks: number) => void;
+  showTitle?: boolean;
 }
 
-export function UploadPanel({ onUploadSuccess }: UploadPanelProps) {
+export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelProps) {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [progress, setProgress] = useState(0);
@@ -146,14 +147,16 @@ export function UploadPanel({ onUploadSuccess }: UploadPanelProps) {
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 backdrop-blur-md shadow-xl overflow-hidden">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-200">Ingest Document</h3>
-        {file && (
-          <button onClick={reset} className="text-slate-500 hover:text-slate-300 transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      {showTitle && (
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-200">Ingest Document</h3>
+          {file && (
+            <button onClick={reset} className="text-slate-500 hover:text-slate-300 transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
 
       {!file ? (
         <div

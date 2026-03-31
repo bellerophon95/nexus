@@ -1,7 +1,10 @@
 node_modules
 .next
 .git
+.venv
+.pytest_cache
 backend/venv
 **/__pycache__
 .env
 *.log
+tmp/uploads/

@@ -25,7 +25,12 @@ interface Document {
   created_at: string;
 }
 
-export function DocumentLibrary() {
+interface DocumentLibraryProps {
+  refreshTrigger?: number;
+  showTitle?: boolean;
+}
+
+export function DocumentLibrary({ refreshTrigger, showTitle = true }: DocumentLibraryProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -69,7 +74,7 @@ export function DocumentLibrary() {
 
   useEffect(() => {
     fetchDocuments();
-  }, []);
+  }, [refreshTrigger]);
 
   const getDocIcon = (type: string) => {
     switch (type.toLowerCase()) {
@@ -91,23 +96,25 @@ export function DocumentLibrary() {
 
   return (
     <div className="flex flex-1 flex-col p-8 max-w-6xl mx-auto w-full">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h2 className="text-3xl font-extrabold text-slate-100 tracking-tight flex items-center gap-3">
-            <Layers className="h-8 w-8 text-blue-500" />
-            Document Library
-          </h2>
-          <p className="text-slate-500 mt-1 text-sm font-medium">Manage your knowledge base and vector embeddings.</p>
+      {showTitle && (
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h2 className="text-3xl font-extrabold text-slate-100 tracking-tight flex items-center gap-3">
+              <Layers className="h-8 w-8 text-blue-500" />
+              Document Library
+            </h2>
+            <p className="text-slate-500 mt-1 text-sm font-medium">Manage your knowledge base and vector embeddings.</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={fetchDocuments}
+            className="border-slate-800 bg-slate-900/50 hover:bg-slate-800 text-slate-300 gap-2 border shadow-xl backdrop-blur-md"
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            Refresh
+          </Button>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={fetchDocuments}
-          className="border-slate-800 bg-slate-900/50 hover:bg-slate-800 text-slate-300 gap-2 border shadow-xl backdrop-blur-md"
-        >
-          <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-          Refresh
-        </Button>
-      </div>
+      )}
 
       {documents.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-12 text-center shadow-inner">

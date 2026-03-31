@@ -1,0 +1,1 @@
+Project Nexus AWS Migration Test. This is a small test file to verify the ingestion pipeline on the newly stabilized AWS production environment. It should be parsed, cleaned, semantically chunked, and upserted into the vector warehouse without any GLib errors.

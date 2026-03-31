@@ -20,8 +20,7 @@ import { ChatInterface, Message } from "@/components/ChatInterface";
 import { AgentActivity, AgentStep } from "@/components/AgentActivity";
 import { CitationCard } from "@/components/CitationCard";
 import { MetricsPanel, ChatMetrics } from "@/components/MetricsPanel";
-import { UploadPanel } from "@/components/UploadPanel";
-import { DocumentLibrary } from "@/components/DocumentLibrary";
+import { KnowledgeHub } from "@/components/KnowledgeHub";
 import { SidebarHistory } from "@/components/SidebarHistory";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/constants";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"chat" | "upload" | "library" | "settings">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "library" | "settings">("chat");
   const [citations, setCitations] = useState<any[]>([]);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [metrics, setMetrics] = useState<ChatMetrics | null>(null);
@@ -145,15 +144,8 @@ export default function Home() {
             isOpen={isSidebarOpen}
           />
           <SidebarItem 
-            icon={<Plus className="h-4 w-4" />} 
-            label="Ingest Local File" 
-            isActive={activeTab === "upload"} 
-            onClick={() => setActiveTab("upload")}
-            isOpen={isSidebarOpen}
-          />
-          <SidebarItem 
              icon={<Library className="h-4 w-4" />} 
-             label="Document Library" 
+             label="Knowledge Base" 
              isActive={activeTab === "library"} 
              onClick={() => setActiveTab("library")}
              isOpen={isSidebarOpen}
@@ -311,40 +303,8 @@ export default function Home() {
             
             <MetricsPanel metrics={metrics} isLoading={isMetricsLoading} />
           </div>
-        ) : activeTab === "upload" ? (
-          <div className="flex flex-1 flex-col items-center justify-center bg-slate-950 p-10 overflow-hidden relative">
-             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(59,130,246,0.1),transparent)]" />
-             <div className="mx-auto max-w-xl w-full z-10">
-                <div className="mb-8 text-center">
-                   <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase mb-4">Deep Knowledge Ingestion</h2>
-                   <p className="text-slate-400 text-sm">Upload your PDF, DOCX, or HTML research papers. Our pipeline will clean, semantically chunk, and index them into the vector warehouse.</p>
-                </div>
-                <UploadPanel 
-                  onUploadSuccess={() => {
-                    setTimeout(() => setActiveTab("library"), 1500);
-                  }} 
-                />
-                
-                <div className="mt-12 grid grid-cols-2 gap-4">
-                   <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 transition-all hover:border-blue-500/30 group">
-                      <div className="mb-2 h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center transition-colors group-hover:bg-blue-500/20">
-                         <GitBranch className="h-4 w-4 text-blue-400" />
-                      </div>
-                      <p className="text-xs font-bold text-slate-200">Semantic Chunking</p>
-                      <p className="mt-1 text-[10px] text-slate-500">Our L6-v2 breakpoint algorithm identifies logical shifts to keep context cohesive.</p>
-                   </div>
-                   <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 transition-all hover:border-emerald-500/30 group">
-                      <div className="mb-2 h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center transition-colors group-hover:bg-emerald-500/20">
-                         <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                      </div>
-                      <p className="text-xs font-bold text-slate-200">Entity Enrichment</p>
-                      <p className="mt-1 text-[10px] text-slate-500">Automatic NER extraction for PERSON, ORG, and DATE entities from every chunk.</p>
-                   </div>
-                </div>
-             </div>
-          </div>
         ) : activeTab === "library" ? (
-          <DocumentLibrary />
+          <KnowledgeHub />
         ) : (
           <div className="flex h-full flex-col items-center justify-center space-y-4 text-center">
             <Settings className="h-12 w-12 text-slate-800 animate-pulse" />
