@@ -1,12 +1,14 @@
 import logging
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, HTTPException, Query, Body, Request, Depends
 from pydantic import BaseModel, Field
 import uuid
+from backend.api.security import get_user_id
 from backend.database.chat import (
     get_conversations, 
     get_messages, 
-    update_message_feedback
+    update_message_feedback,
+    sync_user
 )
 
 logger = logging.getLogger(__name__)
@@ -16,12 +18,22 @@ class FeedbackRequest(BaseModel):
     score: int # 1 for up, -1 for down
 
 @router.get("/conversations")
-async def list_conversations(limit: int = 20):
+async def list_conversations(
+    request: Request,
+    limit: int = 20, 
+    user_id: Optional[str] = Depends(get_user_id)
+):
     """
     Returns a list of recent conversation threads.
+    Now filtered by user_id for shadow auth.
     """
     try:
-        conversations = await get_conversations(limit)
+        # Shadow Auth: Sync user registration
+        access_tier = request.headers.get("X-Nexus-Access-Tier") or "visitor"
+        if user_id:
+            await sync_user(user_id, access_tier)
+
+        conversations = await get_conversations(user_id=user_id, limit=limit)
         return {"conversations": conversations}
     except Exception as e:
         logger.error(f"Failed to list conversations: {e}")

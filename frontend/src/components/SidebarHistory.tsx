@@ -3,6 +3,7 @@ import { MessageSquare, Clock, Search, Plus, Trash2, ChevronRight } from "lucide
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { API_BASE_URL } from "@/lib/constants";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface Conversation {
   id: string;
@@ -32,7 +33,9 @@ export function SidebarHistory({
   const fetchConversations = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/conversations`);
+      const response = await fetch(`${API_BASE_URL}/api/conversations`, {
+        headers: getAuthHeaders()
+      });
       const data = await response.json();
       setConversations(data.conversations || []);
     } catch (err) {
@@ -56,6 +59,7 @@ export function SidebarHistory({
     try {
       const response = await fetch(`${API_BASE_URL}/api/conversations/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders()
       });
       
       if (response.ok) {

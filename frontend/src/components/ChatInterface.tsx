@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./MessageBubble";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/constants";
+import { getAuthHeaders, getOrCreateSessionId } from "@/lib/auth";
 
 export interface AgentStep {
   agent: string;
@@ -118,7 +119,10 @@ export function ChatInterface({
     }
 
     // Connect to SSE endpoint (Uses API_BASE_URL for production compatibility)
-    let url = `${API_BASE_URL}/api/query?q=${encodeURIComponent(input)}&match_threshold=${matchThreshold}&rerank=${rerank}`;
+    // Note: SSE (EventSource) doesn't support custom headers, 
+    // so we pass user_id as a query param.
+    const userId = getOrCreateSessionId();
+    let url = `${API_BASE_URL}/api/query?q=${encodeURIComponent(input)}&match_threshold=${matchThreshold}&rerank=${rerank}&user_id=${userId}`;
     if (conversationId) {
       url += `&conversation_id=${conversationId}`;
     }
@@ -221,7 +225,10 @@ export function ChatInterface({
     try {
       const response = await fetch(`${API_BASE_URL}/api/messages/${messageId}/feedback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...getAuthHeaders()
+        },
         body: JSON.stringify({ score })
       });
       
@@ -379,7 +386,7 @@ export function ChatInterface({
                 feedback={msg.feedback}
                 metrics={msg.metrics}
                 agentSteps={msg.agentSteps}
-                onCitationClick={(id) => {
+                onCitationClick={(id: string | number) => {
                    document.getElementById(`citation-${id}`)?.scrollIntoView({ behavior: 'smooth' });
                 }}
                 onFeedback={handleFeedback}

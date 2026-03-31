@@ -4,13 +4,13 @@ import logging
 from fastapi import APIRouter, Query, Request, Depends
 from fastapi.responses import StreamingResponse
 from typing import AsyncGenerator, Optional, List, Dict, Any
-from backend.api.security import rate_limit_dependency
+from backend.api.security import rate_limit_dependency, get_user_id
 
 from backend.cache.semantic_cache import get_semantic_cache
 from backend.retrieval.searcher import search_knowledge_base
 from backend.retrieval.generator import generate_answer_stream, generate_title
 from backend.evaluation.llm_judge import llm_judge_evaluate_async
-from backend.database.chat import create_conversation, save_message, get_messages
+from backend.database.chat import create_conversation, save_message, get_messages, sync_user
 from backend.guardrails.input_guard import run_input_guardrails
 from backend.guardrails.output_guard import run_output_guardrails
 from backend.observability.tracing import observe
@@ -26,6 +26,7 @@ async def query_streaming(
     conversation_id: Optional[str] = Query(None),
     match_threshold: float = Query(0.2),
     rerank: bool = Query(True),
+    user_id: Optional[str] = Depends(get_user_id),
     _ = Depends(rate_limit_dependency)
 ):
     """
@@ -35,6 +36,11 @@ async def query_streaming(
     """
     
     start_time = time.perf_counter()
+    # Shadow Auth: Sync user registration
+    access_tier = request.headers.get("X-Nexus-Access-Tier") or "visitor"
+    if user_id:
+        await sync_user(user_id, access_tier)
+
     current_conv_id = conversation_id
     
     async def event_generator() -> AsyncGenerator[str, None]:
@@ -77,8 +83,8 @@ async def query_streaming(
             if not current_conv_id:
                 yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Nexus', 'tool': 'Initializing Thread', 'status': 'running'})}\n\n"
                 title = await generate_title(effective_q)
-                current_conv_id = await create_conversation(title)
-                logger.info(f"Created new conversation with title '{title}': {current_conv_id}")
+                current_conv_id = await create_conversation(title, user_id=user_id)
+                logger.info(f"Created new conversation for user {user_id} with title '{title}': {current_conv_id}")
                 yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Nexus', 'tool': 'Initializing Thread', 'status': 'completed'})}\n\n"
             
             # Save user message (save the raw query for user history, but effective_q is used for LLM)

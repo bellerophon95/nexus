@@ -27,6 +27,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/constants";
+import { getOrCreateSessionId, handleAccessParams, getAuthHeaders } from "@/lib/auth";
+import { useEffect } from "react";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"chat" | "library" | "settings">("chat");
@@ -38,6 +40,18 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [refreshHistoryTrigger, setRefreshHistoryTrigger] = useState(0);
+  const [sessionId, setSessionId] = useState<string>("");
+  const [accessTier, setAccessTier] = useState<string>("visitor");
+
+  useEffect(() => {
+    // 1. Initialize session and handle access params once on mount
+    handleAccessParams();
+    const sid = getOrCreateSessionId(); 
+    setSessionId(sid);
+    
+    const tier = typeof window !== 'undefined' ? localStorage.getItem('nexus_access_tier') || 'visitor' : 'visitor';
+    setAccessTier(tier);
+  }, []);
 
   const handleAgentStep = (stepData: any) => {
     // If we already have this tool/step, update it instead of adding a new one
@@ -103,7 +117,9 @@ export default function Home() {
     setConversationId(id);
     clearState();
     try {
-      const response = await fetch(`${API_BASE_URL}/api/conversations/${id}/messages`);
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${id}/messages`, {
+        headers: getAuthHeaders()
+      });
       const data = await response.json();
       setInitialMessages(data.messages || []);
       setActiveTab("chat");
@@ -183,10 +199,16 @@ export default function Home() {
           {isSidebarOpen && (
             <div className="p-3 border-b border-slate-800/50">
               <div className="flex items-center gap-3 px-2">
-                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-[10px] font-black text-white italic shadow-lg shadow-blue-500/10">VK</div>
-                <div className="flex flex-col">
-                   <span className="text-[11px] font-bold text-slate-200 leading-tight">Vibhor K.</span>
-                   <span className="text-[9px] text-slate-500 font-medium tracking-tight">Researcher ID: #0xNexus</span>
+                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-[10px] font-black text-white italic shadow-lg shadow-blue-500/10">
+                  {accessTier === 'recruiter' ? 'GR' : 'NR'}
+                </div>
+                <div className="flex flex-col overflow-hidden">
+                   <span className="text-[11px] font-bold text-slate-200 leading-tight truncate">
+                     {accessTier === 'recruiter' ? 'Guest Recruiter' : 'Nexus Researcher'}
+                   </span>
+                   <span className="text-[9px] text-slate-500 font-medium tracking-tight truncate">
+                     ID: #{sessionId.slice(0, 8)}
+                   </span>
                 </div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import logging
 import time
-from fastapi import Request, HTTPException, status
+from fastapi import Request, HTTPException, status, Query
+from typing import Optional
 from upstash_redis import Redis
 from backend.config import settings
 
@@ -59,3 +60,16 @@ async def rate_limit_dependency(request: Request):
         # but the user wants to "protect accounts". 
         # Let's fail open but log it.
         pass
+
+async def get_user_id(
+    request: Request,
+    user_id_query: Optional[str] = Query(None, alias="user_id")
+) -> Optional[str]:
+    """
+    Extracts the shadow user ID from the request headers or query params (fallback for SSE).
+    Used for session isolation without full login.
+    """
+    user_id = request.headers.get("X-Nexus-User-Id") or user_id_query
+    if not user_id:
+        return None
+    return user_id

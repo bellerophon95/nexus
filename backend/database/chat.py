@@ -6,13 +6,35 @@ from backend.database.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 
-async def create_conversation(title: str) -> str:
+async def sync_user(user_id: str, access_tier: str = 'visitor') -> bool:
     """
-    Creates a new conversation and returns the ID.
+    Upserts a shadow user record in the database.
     """
     try:
         data = {
+            "id": user_id,
+            "access_tier": access_tier,
+            "last_seen": datetime.utcnow().isoformat()
+        }
+        await asyncio.to_thread(
+            lambda: get_supabase().table("users").upsert(data).execute()
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to sync user {user_id}: {e}")
+        return False
+
+async def create_conversation(title: str, user_id: Optional[str] = None) -> str:
+    """
+    Creates a new conversation and returns the ID.
+    Now supports user_id for shadow auth isolation.
+    """
+    try:
+        # We don't automatically call sync_user here to keep it lean, 
+        # but the API route will call it.
+        data = {
             "title": title,
+            "user_id": user_id,
             "updated_at": datetime.utcnow().isoformat()
         }
         result = await asyncio.to_thread(
@@ -63,21 +85,27 @@ async def save_message(
         logger.error(f"Failed to save message: {e}")
         return None
 
-async def get_conversations(limit: int = 20) -> List[Dict[str, Any]]:
+async def get_conversations(user_id: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
     """
-    Retrieves recent conversations.
+    Retrieves recent conversations. 
+    Filters by user_id if provided (Critical for Shadow Auth).
     """
     try:
+        query = get_supabase().table("conversations").select("*")
+        
+        if user_id:
+            query = query.eq("user_id", user_id)
+        else:
+            # If no user_id is provided, we only return conversations that have NO user_id
+            # This prevents public leakage of recruiter/private sessions.
+            query = query.is_("user_id", "null")
+            
         result = await asyncio.to_thread(
-            lambda: get_supabase().table("conversations")
-                .select("*")
-                .order("updated_at", desc=True)
-                .limit(limit)
-                .execute()
+            lambda: query.order("updated_at", desc=True).limit(limit).execute()
         )
         return result.data if result.data else []
     except Exception as e:
-        logger.error(f"Failed to fetch conversations: {e}")
+        logger.error(f"Failed to fetch conversations (user_id={user_id}): {e}")
         return []
 
 async def get_messages(conversation_id: str) -> List[Dict[str, Any]]:
