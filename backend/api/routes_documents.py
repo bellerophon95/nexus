@@ -29,12 +29,12 @@ def delete_document(document_id: str):
     """
     try:
         # Before deleting, check if it exists so we can give a proper 404
-        check = supabase.table("documents").select("id").eq("id", document_id).execute()
+        check = get_supabase().table("documents").select("id").eq("id", document_id).execute()
         if not check.data:
             raise HTTPException(status_code=404, detail="Document not found")
 
         # Execute deletion
-        response = supabase.table("documents").delete().eq("id", document_id).execute()
+        response = get_supabase().table("documents").delete().eq("id", document_id).execute()
         
         # In the current Supabase SDK, we check if records were actually affected
         if hasattr(response, 'data') and len(response.data) > 0:

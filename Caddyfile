@@ -1,0 +1,18 @@
+{
+    email {$CADDY_EMAIL}
+}
+
+{$DOMAIN_NAME} {
+    # Frontend (Next.js)
+    reverse_proxy frontend:3000
+
+    # Backend (FastAPI) API routes
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log
+    }
+}

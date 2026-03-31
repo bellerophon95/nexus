@@ -36,4 +36,9 @@ local_data/
 .idea/
 .vscode/
 .DS_Store
-.vercel
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+.terraform.lock.hcl

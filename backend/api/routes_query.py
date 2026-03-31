@@ -129,10 +129,6 @@ async def query_streaming(
             if current_conv_id:
                 history = await get_messages(current_conv_id)
 
-            # Step 1: Search relevant chunks
-            context_chunks = await asyncio.to_thread(
-                search_knowledge_base, query=effective_q, limit=5
-            )
             
             tier = "rag"
             if not context_chunks:

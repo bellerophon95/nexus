@@ -12,33 +12,6 @@ _analyzer = None
 _anonymizer = None
 _profanity_loaded = False
 
-def get_analyzer():
-    """
-    Lazy loader for Presidio AnalyzerEngine to fit in 512MB RAM.
-    """
-    global _analyzer
-    if _analyzer is None:
-        try:
-            from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
-            
-            # 1. Custom Password Recognizer
-            password_pattern = Pattern(
-                name="password_pattern",
-                regex=r"(?i)(password|pwd|passphrase|secret)\s*(is|:|=)\s*([^\s,.]+)",
-                score=0.8
-            )
-            password_recognizer = PatternRecognizer(
-                supported_entity="PASSWORD", 
-                patterns=[password_pattern]
-            )
-            
-            _analyzer = AnalyzerEngine(default_score_threshold=0.4)
-            _analyzer.registry.add_recognizer(password_recognizer)
-            logger.info("Presidio AnalyzerEngine initialized.")
-        except Exception as e:
-            logger.error(f"Failed to initialize Presidio Analyzer: {e}")
-            raise
-    return _analyzer
 
 def get_anonymizer():
     """
@@ -127,55 +100,32 @@ def run_input_guardrails(query: str) -> GuardResult:
                 metadata={"detected_pattern": pattern, "guardrail": "injection"}
             )
 
-    # 3. PII Detection (Fast Regex vs Heavy NLP)
+    # 3. PII Detection (Presidio)
     pii_types = []
     sanitized_query = query
     
-    # "Fast Mode" for Development
-    if settings.ENV == "development":
-        # Fast Regex Fallback for common PII
-        patterns = {
-            "EMAIL_ADDRESS": r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
-            "PHONE_NUMBER": r"(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{10})",
-            "CREDIT_CARD": r"\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}",
-            "US_SSN": r"\d{3}-\d{2}-\d{4}",
-            "PASSWORD": r"(?i)(password|pwd|passphrase|secret)\s*(is|:|=)\s*([^\s,.]+)"
-        }
-        
-        for entity_type, regex in patterns.items():
-            matches = re.findall(regex, query)
-            if matches:
-                pii_types.append(entity_type)
-                # Anonymize (simple replacement for speed)
-                sanitized_query = re.sub(regex, f"<{entity_type}>", sanitized_query)
-        
-        if pii_types:
-            logger.info(f"PII detected via Fast Regex: {pii_types}")
-
-    else:
-        # Heavy NLP (Presidio) for Production
-        analyzer = get_analyzer()
-        anonymizer = get_anonymizer()
-        
-        if analyzer and anonymizer:
-            try:
-                entities = [
-                    "PHONE_NUMBER", "EMAIL_ADDRESS", "CREDIT_CARD", 
-                    "LOCATION", "PERSON", "PASSWORD", "US_SSN", 
-                    "IP_ADDRESS", "CRYPTO"
-                ]
-                results = analyzer.analyze(text=query, language='en', entities=entities)
-                pii_types = list(set([res.entity_type for res in results]))
-                
-                if results:
-                    anonymized_result = anonymizer.anonymize(
-                        text=query,
-                        analyzer_results=results
-                    )
-                    sanitized_query = anonymized_result.text
-                    logger.info(f"PII detected via heavy NLP: {pii_types}")
-            except Exception as e:
-                logger.error(f"PII analysis failed: {e}")
+    analyzer = get_analyzer()
+    anonymizer = get_anonymizer()
+    
+    if analyzer and anonymizer:
+        try:
+            entities = [
+                "PHONE_NUMBER", "EMAIL_ADDRESS", "CREDIT_CARD", 
+                "LOCATION", "PERSON", "PASSWORD", "US_SSN", 
+                "IP_ADDRESS", "CRYPTO"
+            ]
+            results = analyzer.analyze(text=query, language='en', entities=entities)
+            pii_types = list(set([res.entity_type for res in results]))
+            
+            if results:
+                anonymized_result = anonymizer.anonymize(
+                    text=query,
+                    analyzer_results=results
+                )
+                sanitized_query = anonymized_result.text
+                logger.info(f"PII detected: {pii_types}")
+        except Exception as e:
+            logger.error(f"PII analysis failed: {e}")
 
     return GuardResult(
         passed=True,

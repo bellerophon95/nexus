@@ -1,36 +1,26 @@
 from sentence_transformers import CrossEncoder
-import logging
-from typing import List, Dict, Any
-from backend.observability.tracing import observe
 
 logger = logging.getLogger(__name__)
 
-# Lazy load the cross-encoder model
-_model = None
-
-def get_reranker_model():
-    global _model
-    if _model is None:
-        try:
-            # Using a lightweight but powerful cross-encoder
-            model_name = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-            logger.info(f"Loading Cross-Encoder model: {model_name}")
-            _model = CrossEncoder(model_name)
-            logger.info("Cross-Encoder model loaded successfully.")
-        except Exception as e:
-            logger.error(f"Failed to load Cross-Encoder model: {e}")
-            raise
-    return _model
+# Load the cross-encoder model eagerly
+model_name = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+logger.info(f"Loading Cross-Encoder model: {model_name}")
+try:
+    _model = CrossEncoder(model_name)
+    logger.info("Cross-Encoder model loaded successfully.")
+except Exception as e:
+    logger.error(f"Failed to load Cross-Encoder model: {e}")
+    _model = None # Fallback or keep for robust handling
 
 @observe()
 def rerank_results(query: str, chunks: List[Dict[str, Any]], top_k: int = 10) -> List[Dict[str, Any]]:
     """
     Reranks a list of retrieved chunks using a Cross-Encoder for higher precision.
     """
-    if not chunks:
-        return []
+    if not chunks or _model is None:
+        return chunks[:top_k]
 
-    model = get_reranker_model()
+    model = _model
     
     # Prepare pairs for cross-encoder (Query, [Title + Text])
     pairs = []

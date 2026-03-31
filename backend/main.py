@@ -45,12 +45,13 @@ app.include_router(routes_tasks.router, prefix="/api", tags=["Tasks"])
 @app.on_event("startup")
 async def startup_event():
     """
-    Consolidated startup: Initialize tracing, validate config, and set storage.
-    Heavy ML models are lazy-loaded on first request for 512MB RAM compatibility.
+    Nexus Platform Startup: Initialize tracing, validate config, and warm up heavy NLP models.
     """
     print(f"--- {settings.APP_NAME} Startup ---")
     
     from backend.observability.tracing import init_tracing
+    from backend.guardrails.input_guard import warmup_guardrails
+    
     init_tracing()
     
     # Ensure local storage exists
@@ -63,7 +64,10 @@ async def startup_event():
     else:
         logger.info("All critical configuration variables are present.")
         
-    logger.info(f"Nexus Backend started in {settings.ENV} mode (Plan: Free Tier Optimized)")
+    # Warm up NLP models (Presidio, etc.) 
+    await warmup_guardrails()
+        
+    logger.info(f"Nexus Backend started in {settings.ENV} mode (Memory: 4GB+ Optimized)")
 
 @app.on_event("shutdown")
 async def shutdown_event():

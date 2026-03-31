@@ -44,11 +44,11 @@ def process_ingestion_task(task_id: str, file_path: str, filename: str):
         logger.info(f"Starting ingestion task {task_id} for {filename}")
         
         # Define progress callback
-        def update_progress(p: float):
-            try:
-                supabase.table("ingestion_tasks").update({"progress": p}).eq("id", task_id).execute()
-            except Exception as e:
-                logger.error(f"Failed to update progress for task {task_id}: {e}")
+        def update_progress(progress: float, message: str):
+            get_supabase().table("ingestion_tasks").update({
+                "progress": progress,
+                "message": message
+            }).eq("id", task_id).execute()
 
         # Run ingestion pipeline
         result = run_ingestion_pipeline(file_path, title=filename, progress_callback=update_progress)

@@ -46,12 +46,12 @@ async def save_message(
             "trace_id": trace_id
         }
         result = await asyncio.to_thread(
-            lambda: supabase.table("messages").insert(data).execute()
+            lambda: get_supabase().table("messages").insert(data).execute()
         )
         
         # Update conversation timestamp
         await asyncio.to_thread(
-            lambda: supabase.table("conversations").update({
+            lambda: get_supabase().table("conversations").update({
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("id", conversation_id).execute()
         )
@@ -69,7 +69,7 @@ async def get_conversations(limit: int = 20) -> List[Dict[str, Any]]:
     """
     try:
         result = await asyncio.to_thread(
-            lambda: supabase.table("conversations")
+            lambda: get_supabase().table("conversations")
                 .select("*")
                 .order("updated_at", desc=True)
                 .limit(limit)
@@ -86,7 +86,7 @@ async def get_messages(conversation_id: str) -> List[Dict[str, Any]]:
     """
     try:
         result = await asyncio.to_thread(
-            lambda: supabase.table("messages")
+            lambda: get_supabase().table("messages")
                 .select("*")
                 .eq("conversation_id", conversation_id)
                 .order("created_at", desc=False)
@@ -104,7 +104,7 @@ async def update_message_feedback(message_id: str, feedback: int) -> bool:
     """
     try:
         result = await asyncio.to_thread(
-            lambda: supabase.table("messages")
+            lambda: get_supabase().table("messages")
                 .update({"feedback": feedback})
                 .eq("id", message_id)
                 .execute()
@@ -120,7 +120,7 @@ async def delete_conversation(conversation_id: str) -> bool:
     """
     try:
         result = await asyncio.to_thread(
-            lambda: supabase.table("conversations")
+            lambda: get_supabase().table("conversations")
                 .delete()
                 .eq("id", conversation_id)
                 .execute()

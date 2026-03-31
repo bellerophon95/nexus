@@ -7,28 +7,25 @@ from backend.observability.tracing import observe
 
 logger = logging.getLogger(__name__)
 
-# Lazy loading of model
-_model = None
+from sentence_transformers import SentenceTransformer
 
-def get_embedder_model():
-    global _model
-    if _model is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            # Consistent model with the chunker
-            _model = SentenceTransformer('all-MiniLM-L6-v2')
-        except Exception as e:
-            logger.error(f"Failed to load embedder model: {e}")
-            raise
-    return _model
+logger = logging.getLogger(__name__)
+
+# Load the sentence-transformer model eagerly
+try:
+    _model = SentenceTransformer('all-MiniLM-L6-v2')
+    logger.info("Sentence-Transformer model loaded successfully.")
+except Exception as e:
+    logger.error(f"Failed to load Sentence-Transformer model: {e}")
+    _model = None
 
 def generate_dense_embedding(text: str) -> List[float]:
     """
     Generates a 384-dimensional dense vector using all-MiniLM-L6-v2.
     """
     try:
-        model = get_embedder_model()
-        embedding = model.encode(text)
+        if _model is None: return []
+        embedding = _model.encode(text)
         return embedding.tolist()
     except Exception as e:
         logger.error(f"Dense embedding generation failed: {e}")
@@ -40,9 +37,9 @@ def generate_dense_embeddings_batch(texts: List[str]) -> List[List[float]]:
     Significantly faster than generating one by one for large document sets.
     """
     try:
-        model = get_embedder_model()
+        if _model is None: return [[] for _ in texts]
         # Using a reasonable batch size for local execution
-        embeddings = model.encode(texts, batch_size=32, show_progress_bar=False)
+        embeddings = _model.encode(texts, batch_size=32, show_progress_bar=False)
         return embeddings.tolist()
     except Exception as e:
         logger.error(f"Batch dense embedding generation failed: {e}")
