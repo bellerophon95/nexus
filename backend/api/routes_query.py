@@ -24,6 +24,8 @@ async def query_streaming(
     request: Request, 
     q: str = Query(...),
     conversation_id: Optional[str] = Query(None),
+    match_threshold: float = Query(0.2),
+    rerank: bool = Query(True),
     _ = Depends(rate_limit_dependency)
 ):
     """
@@ -124,9 +126,14 @@ async def query_streaming(
             yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Retriever', 'tool': 'Scanning Knowledge Base', 'status': 'running'})}\n\n"
             yield f"data: {json.dumps({'type': 'activity', 'node': 'retriever', 'status': 'Searching document vector space...', 'status_type': 'running'})}\n\n"
 
-            # Fetch context chunks from Qdrant
+            # Fetch context chunks from Knowledge Base (Vector + BM25)
             try:
-                context_chunks = await asyncio.to_thread(search_knowledge_base, effective_q)
+                context_chunks = await asyncio.to_thread(
+                    search_knowledge_base, 
+                    effective_q, 
+                    match_threshold=match_threshold, 
+                    rerank=rerank
+                )
             except Exception as e:
                 logger.error(f"Retriever search failed: {e}")
                 context_chunks = []

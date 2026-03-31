@@ -42,6 +42,8 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
       "application/pdf": [".pdf"],
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
       "text/html": [".html"],
+      "text/plain": [".txt"],
+      "text/csv": [".csv"],
     },
     maxSize: 10 * 1024 * 1024, // 10MB
     multiple: false,
@@ -172,7 +174,7 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
             isDragActive && "text-blue-500"
           )} />
           <p className="mt-4 text-xs font-medium text-slate-400 group-hover:text-slate-300">
-            {isDragActive ? "Drop the file here" : "Drag & drop PDF, DOCX, or HTML"}
+            {isDragActive ? "Drop the file here" : "Drag & drop PDF, DOCX, TXT, CSV, or HTML"}
           </p>
           <p className="mt-1 text-[10px] text-slate-600">Max size: 10MB (Free Tier Optimization)</p>
         </div>
