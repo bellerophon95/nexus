@@ -42,28 +42,31 @@ def get_anonymizer():
 
 async def warmup_guardrails():
     """Warms up NLP models to prevent first-request latency."""
-    global _profanity_loaded
-    from backend.config import settings
-    logger.info(f"Warming up guardrail models (Env: {settings.ENV})...")
-    
-    if settings.ENV != "development":
-        # Only do heavy lifting in production (runs in a thread to keep loop free)
-        from backend.retrieval.reranker import get_model
-        await asyncio.to_thread(get_analyzer)
-        await asyncio.to_thread(get_anonymizer)
-        await asyncio.to_thread(get_model)
-    
-    # Configure profanity with technical whitelist (Fast across all envs)
-    if not _profanity_loaded:
-        try:
-            from better_profanity import profanity
-            whitelist = ["dummy", "mock", "stub", "lorem", "ipsum", "test", "demo"]
-            profanity.load_censor_words(whitelist_words=whitelist)
-            _profanity_loaded = True
-        except Exception as e:
-            logger.error(f"Failed to load profanity words: {e}")
-    
-    logger.info("Guardrail models warmed up.")
+    try:
+        global _profanity_loaded
+        from backend.config import settings
+        logger.info(f"Warming up guardrail models (Env: {settings.ENV})...")
+        
+        if settings.ENV != "development":
+            # Only do heavy lifting in production (runs in a thread to keep loop free)
+            from backend.retrieval.reranker import get_model
+            await asyncio.to_thread(get_analyzer)
+            await asyncio.to_thread(get_anonymizer)
+            await asyncio.to_thread(get_model)
+        
+        # Configure profanity with technical whitelist (Fast across all envs)
+        if not _profanity_loaded:
+            try:
+                from better_profanity import profanity
+                whitelist = ["dummy", "mock", "stub", "lorem", "ipsum", "test", "demo"]
+                profanity.load_censor_words(whitelist_words=whitelist)
+                _profanity_loaded = True
+            except Exception as e:
+                logger.error(f"Failed to load profanity words: {e}")
+        
+        logger.info("Guardrail models warmed up successfully.")
+    except Exception as e:
+        logger.error(f"Critical error during guardrail warmup: {e}")
 
 def get_profanity():
     """Lazy loader for better_profanity."""
