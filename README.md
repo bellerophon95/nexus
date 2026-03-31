@@ -2,6 +2,8 @@
 
 > A production-ready Applied AI system featuring adaptive RAG, multi-agent orchestration, hybrid retrieval with cross-encoder reranking, Self-RAG validation, guardrails, RAGAS evaluations, full observability, and semantic caching — deployed on a high-performance serverless stack.
 
+![Nexus Interface](./docs/assets/nexus-interface.png)
+
 ---
 
 ## 🚀 Final Production Infrastructure
