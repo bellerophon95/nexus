@@ -67,11 +67,7 @@ jobs:
             --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --parameters "commands=[
-              \"mkdir -p /home/ubuntu/nexus\",
-              \"cd /home/ubuntu/nexus\",
-              \"echo $DC_B64 | base64 -d > docker-compose.prod.yml\",
-              \"echo $CF_B64 | base64 -d > Caddyfile\",
-              \"cat <<EOF > .env
+              \"mkdir -p /home/ubuntu/nexus && cd /home/ubuntu/nexus && echo $DC_B64 | base64 -d > docker-compose.prod.yml && echo $CF_B64 | base64 -d > Caddyfile && cat <<EOF > .env
               AWS_REGISTRY=$ECR_REGISTRY
               DOMAIN_NAME=$DOMAIN_NAME
               CADDY_EMAIL=$CADDY_EMAIL
@@ -89,9 +85,11 @@ jobs:
               LANGFUSE_PUBLIC_KEY=$LANGFUSE_PUBLIC_KEY
               LANGFUSE_SECRET_KEY=$LANGFUSE_SECRET_KEY
               LANGFUSE_HOST=$LANGFUSE_HOST
-              EOF\",
-              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"docker-compose -f docker-compose.prod.yml pull\",
-              \"docker-compose -f docker-compose.prod.yml up -d\"
+              EOF && \
+              aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY && \
+              docker-compose -f docker-compose.prod.yml pull && \
+              docker-compose -f docker-compose.prod.yml up -d && \
+              docker system prune -af && \
+              docker volume prune -f\"
             ]" \
             --region ${{ secrets.AWS_REGION }}

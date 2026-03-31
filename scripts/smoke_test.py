@@ -1,9 +1,9 @@
+import os
 import httpx
-import sys
-import time
 import json
+import sys
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = os.getenv("BASE_URL", "https://project-nexus.duckdns.org")
 
 def test_health():
     print(f"Checking health at {BASE_URL}/api/health...")

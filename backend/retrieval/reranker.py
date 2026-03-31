@@ -1,4 +1,7 @@
+import logging
+from typing import List, Dict, Any
 from sentence_transformers import CrossEncoder
+from backend.observability.tracing import observe
 
 logger = logging.getLogger(__name__)
 
