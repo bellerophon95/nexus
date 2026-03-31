@@ -20,14 +20,23 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# CORS - Open for Render services with credential support
+# CORS - Explicitly allowing the new AWS domain and keeping legacy Render for compatibility
+allowed_origins = [
+    "https://project-nexus.duckdns.org",
+    "http://project-nexus.duckdns.org",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https?://.*\.onrender\.com|https?://.*\.duckdns\.org|http://localhost:.*|http://127\.0\.0\.1:.*",
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https?://.*\.onrender\.com", # Legacy support
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Custom Middleware (Disabled temporarily to debug streaming hang)
 # app.add_middleware(RequestContextMiddleware)
