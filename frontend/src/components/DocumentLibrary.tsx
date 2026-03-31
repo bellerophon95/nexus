@@ -27,10 +27,11 @@ interface Document {
 
 interface DocumentLibraryProps {
   refreshTrigger?: number;
+  searchQuery?: string;
   showTitle?: boolean;
 }
 
-export function DocumentLibrary({ refreshTrigger, showTitle = true }: DocumentLibraryProps) {
+export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = true }: DocumentLibraryProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -116,29 +117,44 @@ export function DocumentLibrary({ refreshTrigger, showTitle = true }: DocumentLi
         </div>
       )}
 
-      {documents.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-12 text-center shadow-inner">
-          <div className="bg-slate-800/50 p-4 rounded-full mb-4">
-            <Search className="h-10 w-10 text-slate-700" />
-          </div>
-          <h3 className="text-lg font-bold text-slate-300">No documents found</h3>
-          <p className="text-slate-500 max-w-xs mx-auto mt-2 text-sm italic">
-            Your library is empty. Upload your first PDF or text file to start building your AI knowledge base.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
-          <table className="w-full text-left">
-            <thead className="bg-slate-800/50 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-              <tr>
-                <th className="px-6 py-4">Document</th>
-                <th className="px-6 py-4">Chunks</th>
-                <th className="px-6 py-4">Ingested At</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50">
-              {documents.map((doc) => (
+      {/* Filtered Documents */}
+      {(() => {
+        const filteredDocs = documents.filter(doc => 
+          doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          doc.doc_type.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+        if (filteredDocs.length === 0) {
+          return (
+            <div className="flex flex-1 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-12 text-center shadow-inner">
+              <div className="bg-slate-800/50 p-4 rounded-full mb-4">
+                <Search className="h-10 w-10 text-slate-700" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-300">
+                {searchQuery ? "No matching knowledge" : "No documents found"}
+              </h3>
+              <p className="text-slate-500 max-w-xs mx-auto mt-2 text-sm italic">
+                {searchQuery 
+                  ? `We couldn't find anything matching "${searchQuery}" in your grounding layer.` 
+                  : "Your library is empty. Upload your first PDF or text file to start building your AI knowledge base."}
+              </p>
+            </div>
+          );
+        }
+
+        return (
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
+            <table className="w-full text-left">
+              <thead className="bg-slate-800/50 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <tr>
+                  <th className="px-6 py-4">Document</th>
+                  <th className="px-6 py-4">Chunks</th>
+                  <th className="px-6 py-4">Ingested At</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {filteredDocs.map((doc) => (
                 <tr key={doc.id} className="group hover:bg-blue-500/5 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-4">
@@ -192,11 +208,12 @@ export function DocumentLibrary({ refreshTrigger, showTitle = true }: DocumentLi
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
     </div>
   );
 }

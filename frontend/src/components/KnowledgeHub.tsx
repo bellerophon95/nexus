@@ -11,6 +11,7 @@ import {
 import { DocumentLibrary } from "@/components/DocumentLibrary";
 import { UploadPanel } from "@/components/UploadPanel";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import {
 export function KnowledgeHub() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleUploadSuccess = () => {
     // Increment trigger to refresh DocumentLibrary
@@ -47,16 +49,31 @@ export function KnowledgeHub() {
           </div>
         </div>
 
-        <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-          <DialogTrigger
-            render={
-              <Button className="bg-blue-600 hover:bg-blue-500 text-white font-bold gap-2 shadow-lg shadow-blue-500/20 px-6">
-                <Plus className="h-4 w-4" />
-                Add Document
-              </Button>
-            }
-          />
-          <DialogContent className="sm:max-w-xl bg-slate-950 border-slate-800 text-slate-200">
+        <div className="flex items-center gap-6">
+          {/* Search Bar */}
+          <div className="relative hidden md:block">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input 
+              type="text" 
+              placeholder="Filter knowledge..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-10 w-64 rounded-xl border border-slate-800 bg-slate-900/50 pl-10 pr-4 text-xs text-slate-200 placeholder-slate-600 outline-none ring-blue-500/20 focus:ring-2 transition-all shadow-inner"
+            />
+          </div>
+
+          <Separator orientation="vertical" className="h-8 bg-slate-800/60 hidden md:block" />
+
+          <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+            <DialogTrigger
+              render={
+                <Button className="bg-blue-600 hover:bg-blue-500 text-white font-bold gap-2 shadow-lg shadow-blue-500/20 px-6 h-10">
+                  <Plus className="h-4 w-4" />
+                  Add Document
+                </Button>
+              }
+            />
+            <DialogContent className="sm:max-w-xl bg-slate-950 border-slate-800 text-slate-200">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold text-white italic">Ingest Intelligence</DialogTitle>
               <DialogDescription className="text-slate-500">
@@ -68,11 +85,16 @@ export function KnowledgeHub() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </header>
 
       {/* Library Section */}
       <div className="flex-1 overflow-y-auto no-scrollbar">
-        <DocumentLibrary refreshTrigger={refreshTrigger} showTitle={false} />
+        <DocumentLibrary 
+          refreshTrigger={refreshTrigger} 
+          searchQuery={searchQuery}
+          showTitle={false} 
+        />
       </div>
     </div>
   );
