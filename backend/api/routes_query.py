@@ -124,6 +124,13 @@ async def query_streaming(
             yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Retriever', 'tool': 'Scanning Knowledge Base', 'status': 'running'})}\n\n"
             yield f"data: {json.dumps({'type': 'activity', 'node': 'retriever', 'status': 'Searching document vector space...', 'status_type': 'running'})}\n\n"
 
+            # Fetch context chunks from Qdrant
+            try:
+                context_chunks = await asyncio.to_thread(search_knowledge_base, effective_q)
+            except Exception as e:
+                logger.error(f"Retriever search failed: {e}")
+                context_chunks = []
+
             # Fetch history for multi-turn support
             history = []
             if current_conv_id:

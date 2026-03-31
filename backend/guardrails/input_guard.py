@@ -8,9 +8,18 @@ from backend.observability.tracing import observe
 logger = logging.getLogger(__name__)
 
 # Lazily initialize Presidio and Profanity to prevent blocking imports
-_analyzer = None
-_anonymizer = None
-_profanity_loaded = False
+def get_analyzer():
+    """
+    Lazy loader for Presidio AnalyzerEngine.
+    """
+    global _analyzer
+    if _analyzer is None:
+        try:
+            from presidio_analyzer import AnalyzerEngine
+            _analyzer = AnalyzerEngine()
+        except Exception as e:
+            logger.error(f"Failed to initialize Presidio Analyzer: {e}")
+    return _analyzer
 
 
 def get_anonymizer():
