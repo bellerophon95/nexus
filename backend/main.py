@@ -65,7 +65,7 @@ async def startup_event():
         logger.info("All critical configuration variables are present.")
         
     # Warm up NLP models (Presidio, etc.) in background to avoid blocking health checks
-    asyncio.create_task(warmup_guardrails())
+    # asyncio.create_task(warmup_guardrails())
         
     logger.info(f"Nexus Backend started in {settings.ENV} mode (Asynchronous NLP Loading)")
 
