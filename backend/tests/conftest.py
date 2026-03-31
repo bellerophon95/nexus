@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import patch, MagicMock
 import os
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Set testing environment variables before any other imports
 os.environ["ENV"] = "testing"
@@ -11,6 +12,7 @@ os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "mock_service_key"
 os.environ["OPENAI_API_KEY"] = "sk-mock"
 os.environ["ANTHROPIC_API_KEY"] = "sk-ant"
 
+
 @pytest.fixture(autouse=True)
 def mock_supabase():
     """Mock out Supabase to avoid hitting real DB during CI runs."""
@@ -19,12 +21,13 @@ def mock_supabase():
             # Setup a basic mock response object
             mock_client = MagicMock()
             mock_sync.return_value = mock_client
-            
+
             # Setup async mock
             mock_async_client = MagicMock()
             mock_async.return_value = mock_async_client
-            
+
             yield mock_sync, mock_async
+
 
 @pytest.fixture(autouse=True)
 def mock_tracing():
@@ -33,10 +36,11 @@ def mock_tracing():
         mock_init.return_value = True
         yield mock_init
 
+
 @pytest.fixture(autouse=True)
 def mock_guard_warmup():
     """Mock out guardrail warmup to avoid loading heavy models in CI."""
     with patch("backend.guardrails.input_guard.warmup_guardrails") as mock_warmup:
-        # Use a real completed future for the async task if needed, 
+        # Use a real completed future for the async task if needed,
         # but usually mocking the task creation in main.py is enough.
         yield mock_warmup

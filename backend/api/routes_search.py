@@ -1,15 +1,17 @@
 import random
-import asyncio
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from typing import Any
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-from backend.retrieval.searcher import search_knowledge_base
-from backend.retrieval.generator import generate_answer
-from backend.evaluation.ragas_eval import run_ragas_eval_async
+
 from backend.evaluation.llm_judge import llm_judge_evaluate_async
-from backend.observability.tracing import observe, langfuse
+from backend.evaluation.ragas_eval import run_ragas_eval_async
+from backend.observability.tracing import observe
+from backend.retrieval.generator import generate_answer
+from backend.retrieval.searcher import search_knowledge_base
 
 router = APIRouter()
+
 
 class SearchRequest(BaseModel):
     query: str
@@ -17,20 +19,23 @@ class SearchRequest(BaseModel):
     rerank: bool = True
     match_threshold: float = 0.3
 
+
 class SearchResult(BaseModel):
     id: str
     document_id: str
     text: str
-    header: Optional[str] = None
-    metadata: Dict[str, Any]
+    header: str | None = None
+    metadata: dict[str, Any]
     similarity: float
-    rerank_score: Optional[float] = None
+    rerank_score: float | None = None
+
 
 class AskResponse(BaseModel):
     answer: str
-    context: List[SearchResult]
+    context: list[SearchResult]
 
-@router.post("/search", response_model=List[SearchResult])
+
+@router.post("/search", response_model=list[SearchResult])
 @observe(name="API: Search")
 def search_chunks(request: SearchRequest):
     """
@@ -41,11 +46,12 @@ def search_chunks(request: SearchRequest):
             query=request.query,
             limit=request.limit,
             rerank=request.rerank,
-            match_threshold=request.match_threshold
+            match_threshold=request.match_threshold,
         )
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/ask", response_model=AskResponse)
 @observe(name="API: Ask RAG")
@@ -59,44 +65,38 @@ def ask_question(request: SearchRequest, background_tasks: BackgroundTasks):
             query=request.query,
             limit=request.limit,
             rerank=request.rerank,
-            match_threshold=request.match_threshold
+            match_threshold=request.match_threshold,
         )
-        
+
         if not context_chunks:
-             return AskResponse(
+            return AskResponse(
                 answer="No relevant information was found in the knowledge base to answer your question.",
-                context=[]
+                context=[],
             )
 
         # 2. Generate Answer
         answer = generate_answer(request.query, context_chunks)
-        
+
         # 3. Online Evaluation Sampling (5%)
         # We sample asynchronously using BackgroundTasks to not affect latency
         if random.random() < 0.05:
             from langfuse.decorators import langfuse_context
+
             trace_id = langfuse_context.get_current_trace_id()
             context_str = "\n".join([c["text"] for c in context_chunks])
-            
+
             background_tasks.add_task(
-                run_ragas_eval_async, 
-                request.query, 
-                answer, 
-                [c["text"] for c in context_chunks],
-                trace_id
-            )
-            background_tasks.add_task(
-                llm_judge_evaluate_async,
+                run_ragas_eval_async,
                 request.query,
                 answer,
-                context_str,
-                trace_id
+                [c["text"] for c in context_chunks],
+                trace_id,
             )
-        
-        return AskResponse(
-            answer=answer,
-            context=context_chunks
-        )
+            background_tasks.add_task(
+                llm_judge_evaluate_async, request.query, answer, context_str, trace_id
+            )
+
+        return AskResponse(answer=answer, context=context_chunks)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

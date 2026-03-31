@@ -1,74 +1,84 @@
 # Project NEXUS — Multi-Agent Research Intelligence Platform
 
-> A production-ready Applied AI system featuring adaptive RAG, multi-agent orchestration, hybrid retrieval with cross-encoder reranking, Self-RAG validation, guardrails, RAGAS evaluations, full observability, and semantic caching — deployed on a high-performance serverless stack.
+> A production-grade Applied AI system featuring adaptive RAG, multi-agent orchestration via LangGraph, hybrid retrieval (Dense + Sparse), cross-encoder reranking, and full observability.
 
 ![Nexus Interface](./docs/assets/nexus-interface.png)
 
 ---
 
-## 🚀 Final Production Infrastructure
+## 🚀 Production Infrastructure (AWS)
 
-Project Nexus is designed for "Scale-to-Zero" efficiency with "Tier-Zero" performance.
+Project Nexus is deployed on a high-availability **AWS EC2** instance using a modern containerized stack. Global SSL/TLS and routing are handled by **Caddy**.
 
 ```mermaid
 graph TD
-    Client[Next.js 15 Frontend] <--> API[FastAPI Orchestrator]
-    API <--> Qdrant[(Qdrant Vector DB)]
-    API <--> Supabase[(PostgreSQL/Supabase)]
-    API <--> Redis[(Upstash Redis Cache)]
-    API --> Langfuse[Langfuse Observability]
+    Client[Next.js Frontend] <--> Caddy[Caddy Reverse Proxy]
+    Caddy <--> API[FastAPI Backend]
+    
+    subgraph "Infrastructure"
+        API <--> Qdrant[(Qdrant Vector DB)]
+        API <--> Supabase[(PostgreSQL/Supabase)]
+        API <--> Redis[(Upstash Redis Cache)]
+        API --> Langfuse[Langfuse Observability]
+    end
     
     subgraph "RAG Pipeline"
         API --> Retriever[Hybrid Retriever]
-        Retriever --> Reranker[BGE-Reranker-v2]
-        Reranker --> Analyst[LLM Synthesis]
-        Analyst --> Validator[Self-RAG Validator]
+        Retriever --> Reranker[BGE-Reranker-v2-m3]
+        Reranker --> Nodes[LangGraph Agent Nodes]
+        Nodes --> Validator[Self-RAG Validator]
     end
 ```
 
-- **Backend**: Python 12 / FastAPI (deployed on **Railway**)
-- **Frontend**: Next.js 15 / React 19 (deployed on **Vercel**)
-- **Vector DB**: **Qdrant Cloud** (Dense + Sparse/Splade indexes)
-- **Primary DB**: **Supabase** (PostgreSQL)
-- **Semantic Cache**: **Upstash Redis** (High-speed vector cache)
-- **Observability**: **Langfuse** (Tracing, Evals, Cost)
-- **CI/CD**: **GitHub Actions** (Automated Lint, Test, Eval, and Deploy)
+### Stack Detail
+- **Backend**: Python 3.12 / FastAPI (Containerized on Amazon ECR)
+- **Frontend**: Next.js 15 (Containerized on Amazon ECR)
+- **CI/CD**: GitHub Actions (Automated Lint, Test, Build, and AWS SSM Deployment)
+- **Databases**: Qdrant (Vector), Supabase (Postgres), Upstash (Redis Cache)
+- **Observability**: Langfuse (Tracing, Cost, and RAGAS Evaluations)
 
 ---
 
 ## 🧬 Key Technical Features
 
 ### 1. Multi-Agent Orchestration (LangGraph)
-Uses a directed cyclic graph to manage stateful, multi-turn agent interactions. The system transitions between `Retriever`, `Analyst`, and `Validator` nodes to ensure factual accuracy and grounded responses.
+Uses a directed cyclic graph to manage stateful, multi-turn agent interactions. The system dynamically transitions between `Researcher`, `Analyst`, and `Validator` nodes to ensure grounded responses.
 
 ### 2. Hybrid Retrieval & Reranking
-- **Dense Retrieval**: OpenAI `text-embedding-3-small` for semantic similarity.
-- **Sparse Retrieval**: BM25/Splade for keyword-perfect matching.
-- **Cross-Encoder Reranker**: Integrated `BGE-Reranker-v2-m3` to re-score the top 50 candidates, drastically reducing hallucination by surfacing the most relevant context.
+- **Dense Retrieval**: `sentence-transformers/all-MiniLM-L6-v2` for semantic similarity.
+- **Sparse Retrieval**: BM25/Bag-of-Words for keyword-perfect matching.
+- **Cross-Encoder Reranker**: `BGE-Reranker-v2-m3` re-scores candidates to practically eliminate hallucinations by surfacing the most relevant context.
 
-### 3. Agentic Observability
-Surfaces real-time "inner monologue" telemetry via SSE:
+### 3. CI/CD Quality Gates ("Hardened Pipeline")
+The codebase is protected by a mandatory **Validation Layer** in GitHub Actions:
+- **Ruff**: Enforces strict linting and formatting (`ruff check` + `ruff format`).
+- **Pytest**: Automated test suite verifies backend initialization and API stability before any deployment.
+
+### 4. Agentic Observability
+Surfaces real-time "inner monologue" telemetry:
 - **Visual Process Map**: Real-time visualization of agent node transitions.
-- **Deep Trace Metrics**: Latency, Token Usage, and Cost calculation per turn.
-- **Safety Badges**: Real-time guardrail status (Passed/Altered).
-
-### 4. Self-RAG & Evaluation
-- **Faithfulness (Grounding)**: Automated scoring of whether the LLM's claims are supported by the retrieved context.
-- **Relevance**: Evaluates how well the answer addresses the user's intent.
-- **RAGAS/Langfuse**: Full-trace integration for continuous evaluation in production.
+- **Trace Metrics**: Latency and Cost calculation per turn via Langfuse.
 
 ---
 
 ## 🛠️ Developer Setup
 
-### Backend (FastAPI)
+### Prerequisites
+- Python 3.12+
+- Node.js 18+
+- Docker & Docker Compose (Optional, for prod simulation)
+
+### 1. Backend (FastAPI)
 ```bash
 cd backend
-poetry install
-poetry run uvicorn api.main:app --reload
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m uvicorn main:app --reload
 ```
+*Note: Copy `.env.example` to `.env` and fill in your keys.*
 
-### Frontend (Next.js)
+### 2. Frontend (Next.js)
 ```bash
 cd frontend
 npm install
@@ -77,10 +87,15 @@ npm run dev
 
 ---
 
-## 🎯 Project Goals
-- **Parity**: Matching backend complexity with professional-grade UI controls.
-- **Transparency**: Surfacing the "Black Box" of RAG through visual telemetry.
-- **Accuracy**: achieving <5% hallucination rate through cross-encoder reranking and Self-RAG validation.
+## 🎯 Production Deployment
+
+Deployments are fully automated via GitHub Actions on `push` to `main`.
+
+1. **Validate**: Ruff and Pytest ensure code quality.
+2. **Build**: Docker images are built and pushed to **Amazon ECR**.
+3. **Deploy**: **AWS SSM** triggers a `docker-compose pull` and `up -d` on the production EC2 instance.
+
+*Current Host: `project-nexus.duckdns.org`*
 
 ---
 

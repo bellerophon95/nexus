@@ -1,8 +1,9 @@
-import pytest
 from fastapi.testclient import TestClient
+
 from backend.main import app
 
 client = TestClient(app)
+
 
 def test_health_check_endpoint():
     """
@@ -14,6 +15,7 @@ def test_health_check_endpoint():
     assert data["status"] == "healthy"
     assert "app" in data
     assert "timestamp" in data
+
 
 def test_query_endpoint_connectivity():
     """

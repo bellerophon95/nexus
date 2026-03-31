@@ -1,11 +1,13 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
-from typing import List, Dict, Any
+
 from backend.database.supabase import get_supabase
 from backend.observability.tracing import observe
-import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
 
 @router.get("/")
 @observe(name="List Documents")
@@ -14,11 +16,14 @@ def list_documents():
     Fetches all documents from the library.
     """
     try:
-        response = get_supabase().table("documents").select("*").order("created_at", desc=True).execute()
+        response = (
+            get_supabase().table("documents").select("*").order("created_at", desc=True).execute()
+        )
         return response.data
     except Exception as e:
         logger.error(f"Failed to fetch documents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.delete("/{document_id}")
 @observe(name="Delete Document")
@@ -35,15 +40,15 @@ def delete_document(document_id: str):
 
         # Execute deletion
         response = get_supabase().table("documents").delete().eq("id", document_id).execute()
-        
+
         # In the current Supabase SDK, we check if records were actually affected
-        if hasattr(response, 'data') and len(response.data) > 0:
+        if hasattr(response, "data") and len(response.data) > 0:
             logger.info(f"Successfully deleted document: {document_id}")
             return {"status": "success", "message": f"Document {document_id} deleted."}
         else:
             # Maybe it was already deleted by another process
             return {"status": "success", "message": "Document record already removed."}
-            
+
     except HTTPException:
         raise
     except Exception as e:

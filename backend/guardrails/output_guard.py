@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+
 from backend.guardrails.models import GuardResult
 from backend.observability.tracing import observe
 
@@ -11,19 +11,32 @@ _profanity_loaded = False
 
 # Expanded whitelist to prevent false positives with dummy text and Markdown syntax
 TECHNICAL_WHITELIST = [
-    "dummy", "mock", "stub", "lorem", "ipsum", 
-    "answer", "sources", "citations", "references",
-    "context", "synthetic", "testing", "development"
+    "dummy",
+    "mock",
+    "stub",
+    "lorem",
+    "ipsum",
+    "answer",
+    "sources",
+    "citations",
+    "references",
+    "context",
+    "synthetic",
+    "testing",
+    "development",
 ]
+
 
 def get_profanity():
     """Lazy loader for better_profanity."""
     global _profanity_loaded
     from better_profanity import profanity
+
     if not _profanity_loaded:
         profanity.load_censor_words(whitelist_words=TECHNICAL_WHITELIST)
         _profanity_loaded = True
     return profanity
+
 
 def get_analyzer():
     """Lazy loader for Presidio AnalyzerEngine."""
@@ -31,10 +44,12 @@ def get_analyzer():
     if _analyzer is None:
         try:
             from presidio_analyzer import AnalyzerEngine
+
             _analyzer = AnalyzerEngine()
         except Exception as e:
             logger.error(f"Failed to initialize Presidio for output: {e}")
     return _analyzer
+
 
 @observe(name="Output Guardrails")
 def run_output_guardrails(answer: str) -> GuardResult:
@@ -49,7 +64,7 @@ def run_output_guardrails(answer: str) -> GuardResult:
             passed=False,
             sanitized_content="[REDACTED TOXIC CONTENT]",
             blocked_reason="Safety violation: High toxicity detected in response.",
-            metadata={"guardrail": "output_profanity"}
+            metadata={"guardrail": "output_profanity"},
         )
 
     # 2. PII Leak Detection
@@ -58,8 +73,8 @@ def run_output_guardrails(answer: str) -> GuardResult:
     analyzer = get_analyzer()
     if analyzer:
         try:
-            results = analyzer.analyze(text=answer, language='en')
-            pii_types = list(set([res.entity_type for res in results]))
+            results = analyzer.analyze(text=answer, language="en")
+            pii_types = list({res.entity_type for res in results})
             if pii_types:
                 warnings.append(f"PII detected in response: {', '.join(pii_types)}")
                 logger.warning(f"PII Leak detected: {pii_types}")
@@ -67,8 +82,5 @@ def run_output_guardrails(answer: str) -> GuardResult:
             logger.error(f"PII analysis failed in output: {e}")
 
     return GuardResult(
-        passed=True,
-        sanitized_content=answer,
-        pii_detected=pii_types,
-        warnings=warnings
+        passed=True, sanitized_content=answer, pii_detected=pii_types, warnings=warnings
     )

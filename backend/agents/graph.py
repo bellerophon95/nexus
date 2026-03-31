@@ -1,10 +1,12 @@
 import logging
+
 from langgraph.graph import END, StateGraph
 
 from backend.agents.nodes import analyst_node, researcher_node, supervisor_node, validator_node
 from backend.agents.state import NexusState
 
 logger = logging.getLogger(__name__)
+
 
 def build_nexus_graph():
     """
@@ -24,25 +26,20 @@ def build_nexus_graph():
         Conditional logic for routing from the supervisor.
         """
         agent = state.get("current_agent", "end")
-        
+
         if agent == "researcher":
             return "researcher"
         if agent == "analyst":
             return "analyst"
         if agent == "validator":
             return "validator"
-        
+
         return "end"
 
     workflow.add_conditional_edges(
         "supervisor",
         route_supervisor,
-        {
-            "researcher": "researcher",
-            "analyst": "analyst",
-            "validator": "validator",
-            "end": END
-        }
+        {"researcher": "researcher", "analyst": "analyst", "validator": "validator", "end": END},
     )
 
     # All nodes except validator loop back to supervisor to check next step
@@ -55,6 +52,7 @@ def build_nexus_graph():
 
     # 4. Compile
     return workflow.compile()
+
 
 # Global graph instance for API to use
 nexus_graph = build_nexus_graph()

@@ -1,19 +1,18 @@
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 from backend.database.supabase import get_supabase
 from backend.ingestion.embedder import generate_dense_embedding
-from backend.retrieval.reranker import rerank_results
 from backend.observability.tracing import observe
+from backend.retrieval.reranker import rerank_results
 
 logger = logging.getLogger(__name__)
 
+
 @observe(name="Search Knowledge Base")
 def search_knowledge_base(
-    query: str, 
-    limit: int = 10, 
-    rerank: bool = True,
-    match_threshold: float = 0.2
-) -> List[Dict[str, Any]]:
+    query: str, limit: int = 10, rerank: bool = True, match_threshold: float = 0.2
+) -> list[dict[str, Any]]:
     """
     Performs a hybrid search (Dense + Sparse) and optionally reranks results.
     """
@@ -27,16 +26,20 @@ def search_knowledge_base(
         # 2. Call Supabase RPC for hybrid search
         # match_count is high so we have enough candidates for reranking
         match_count = limit * 3 if rerank else limit
-        
-        response = get_supabase().rpc(
-            "match_hybrid_chunks",
-            {
-                "query_embedding": query_embedding,
-                "query_text": query,
-                "match_threshold": match_threshold,
-                "match_count": match_count
-            }
-        ).execute()
+
+        response = (
+            get_supabase()
+            .rpc(
+                "match_hybrid_chunks",
+                {
+                    "query_embedding": query_embedding,
+                    "query_text": query,
+                    "match_threshold": match_threshold,
+                    "match_count": match_count,
+                },
+            )
+            .execute()
+        )
 
         initial_results = response.data if response.data else []
         logger.info(f"Retrieved {len(initial_results)} results from hybrid search.")

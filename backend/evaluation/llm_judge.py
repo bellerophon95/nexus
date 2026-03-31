@@ -1,15 +1,17 @@
-import logging
-import json
 import asyncio
+import json
+import logging
 import traceback
-from typing import Dict, Any, Optional
+from typing import Any
+
+from langchain_openai import ChatOpenAI
+
 from backend.config import settings
 from backend.observability.tracing import get_langfuse_client
 
 logger = logging.getLogger(__name__)
 
 # Initialize LLM for Judge (Using GPT-4o-mini as fallback due to Anthropic credit issues)
-from langchain_openai import ChatOpenAI
 judge_llm = ChatOpenAI(model="gpt-4o-mini", api_key=settings.OPENAI_API_KEY, temperature=0)
 
 JUDGE_PROMPT = """
@@ -48,12 +50,10 @@ ANSWER: {answer}
 ---
 """
 
+
 def llm_judge_evaluate_sync(
-    question: str, 
-    answer: str, 
-    context: str, 
-    trace_id: str
-) -> Dict[str, Any]:
+    question: str, answer: str, context: str, trace_id: str
+) -> dict[str, Any]:
     """
     Uses GPT-4o-mini to evaluate a response quality.
     """
@@ -62,25 +62,22 @@ def llm_judge_evaluate_sync(
         return {}
 
     try:
-        prompt = JUDGE_PROMPT.format(
-            question=question,
-            context=context,
-            answer=answer
-        )
-        
+        prompt = JUDGE_PROMPT.format(question=question, context=context, answer=answer)
+
         # Call OpenAI instead of Anthropic
         response = judge_llm.invoke(prompt)
         content = response.content.strip()
         print(f"DEBUG: Claude Response: {content}")
-        
+
         # More robust JSON extraction
         import re
+
         match = re.search(r"\{.*\}", content, re.DOTALL)
         if match:
             content = match.group(0)
-            
+
         result = json.loads(content)
-        
+
         # Normalize result to dict with clean keys
         if isinstance(result, dict):
             clean_result = {}
@@ -93,11 +90,18 @@ def llm_judge_evaluate_sync(
             return {}
 
         logger.info(f"LLM Judge normalized results: {result}")
-        
+
         # Push scores to Langfuse
         client = get_langfuse_client()
-        metrics_to_check = ["correctness", "completeness", "conciseness", "citation_quality", "relevance", "faithfulness"]
-        
+        metrics_to_check = [
+            "correctness",
+            "completeness",
+            "conciseness",
+            "citation_quality",
+            "relevance",
+            "faithfulness",
+        ]
+
         scores_found = {}
         for metric in metrics_to_check:
             # Try to find the metric in result keys (fuzzy match)
@@ -106,7 +110,7 @@ def llm_judge_evaluate_sync(
                 if metric in k:
                     val = v
                     break
-            
+
             if val is not None:
                 try:
                     score_val = float(val)
@@ -115,33 +119,24 @@ def llm_judge_evaluate_sync(
                         trace_id=trace_id,
                         name=f"judge_{metric}",
                         value=score_val,
-                        comment=str(result.get("reasoning", ""))
+                        comment=str(result.get("reasoning", "")),
                     )
                 except (ValueError, TypeError):
                     continue
-        
+
         return scores_found
-        
+
     except Exception as e:
         traceback.print_exc()
         logger.error(f"LLM Judge failed for trace {trace_id}: {e}")
         return {}
 
-async def llm_judge_evaluate_async(
-    question: str, 
-    answer: str, 
-    context: str, 
-    trace_id: str
-):
+
+async def llm_judge_evaluate_async(question: str, answer: str, context: str, trace_id: str):
     """
     Async wrapper for LLM Judge.
     """
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
-        None, 
-        llm_judge_evaluate_sync, 
-        question, 
-        answer, 
-        context, 
-        trace_id
+        None, llm_judge_evaluate_sync, question, answer, context, trace_id
     )
