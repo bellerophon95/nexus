@@ -44,11 +44,21 @@ def process_ingestion_task(task_id: str, file_path: str, filename: str):
         logger.info(f"Starting ingestion task {task_id} for {filename}")
         
         # Define progress callback
-        def update_progress(progress: float, message: str):
-            get_supabase().table("ingestion_tasks").update({
-                "progress": progress,
-                "message": message
-            }).eq("id", task_id).execute()
+        def update_progress(progress: float, message: Optional[str] = None):
+            update_data = {"progress": progress}
+            
+            if message:
+                update_data["message"] = message
+            else:
+                # Infer descriptive message from progress stage
+                if progress < 15: update_data["message"] = "Parsing document..."
+                elif progress < 20: update_data["message"] = "Cleaning content..."
+                elif progress < 40: update_data["message"] = "Semantic chunking..."
+                elif progress < 90: update_data["message"] = "Enriching and embedding..."
+                elif progress < 100: update_data["message"] = "Persisting to warehouse..."
+                else: update_data["message"] = "Complete."
+                
+            get_supabase().table("ingestion_tasks").update(update_data).eq("id", task_id).execute()
 
         # Run ingestion pipeline
         result = run_ingestion_pipeline(file_path, title=filename, progress_callback=update_progress)
