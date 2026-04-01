@@ -47,15 +47,26 @@ async def query_streaming(
     async def event_generator() -> AsyncGenerator[str, None]:
         nonlocal current_conv_id
         captured_steps = []
+        last_heartbeat = time.perf_counter()
 
         async def yield_agent_step(agent, tool, status):
             step = {"type": "agent_step", "agent": agent, "tool": tool, "status": status}
             captured_steps.append(step)
             return f"data: {json.dumps(step)}\n\n"
 
+        async def heartbeat():
+            """Yields an SSE comment to keep the connection alive."""
+            nonlocal last_heartbeat
+            now = time.perf_counter()
+            if now - last_heartbeat > 15:  # Every 15 seconds of silence
+                last_heartbeat = now
+                return ": heartbeat\n\n"
+            return None
+
         print(f"DEBUG: event_generator starting for query: {q[:20]}")
         yield await yield_agent_step("Nexus", "Initializing Connection", "running")
         yield f"data: {json.dumps({'type': 'activity', 'node': 'router', 'status': 'Analyzing query intent...', 'status_type': 'running'})}\n\n"
+        last_heartbeat = time.perf_counter()
 
         try:
             # 1. Immediate feedback to prevent "hang" perception
@@ -141,15 +152,24 @@ async def query_streaming(
             # 2. Cache Miss: Execute RAG Pipeline
             yield await yield_agent_step("Retriever", "Scanning Knowledge Base", "running")
             yield f"data: {json.dumps({'type': 'activity', 'node': 'retriever', 'status': 'Searching document vector space...', 'status_type': 'running'})}\n\n"
+            last_heartbeat = time.perf_counter()
 
             # Fetch context chunks from Knowledge Base (Vector + BM25)
             try:
-                context_chunks = await asyncio.to_thread(
+                # Use a small loop to allow heartbeats if search is slow (rare but possible)
+                search_task = asyncio.create_task(asyncio.to_thread(
                     search_knowledge_base,
                     effective_q,
                     match_threshold=match_threshold,
                     rerank=rerank,
-                )
+                ))
+                
+                while not search_task.done():
+                    hb = await heartbeat()
+                    if hb: yield hb
+                    await asyncio.sleep(0.5)
+                
+                context_chunks = await search_task
             except Exception as e:
                 logger.error(f"Retriever search failed: {e}")
                 context_chunks = []
@@ -182,6 +202,7 @@ async def query_streaming(
 
                 full_answer += token
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                last_heartbeat = time.perf_counter()
                 # Small sleep to prevent network buffer issues and allow smooth frontend rendering
                 await asyncio.sleep(0.01)
 
@@ -227,13 +248,22 @@ async def query_streaming(
 
             # Wait for both with a reasonable timeout to prevent UI "hang"
             # If evaluation takes too long, we'll continue with partial data
+            # Wait for both with a reasonable timeout to prevent UI "hang"
+            # If evaluation takes too long, we'll continue with partial data
             try:
                 # Give it up to 4 seconds for GPT-4o-mini to respond
-                judge_results, output_guard = await asyncio.gather(
+                eval_task = asyncio.create_task(asyncio.gather(
                     asyncio.wait_for(judge_task, timeout=4.0),
                     asyncio.wait_for(output_guard_task, timeout=4.0),
-                )
-            except TimeoutError:
+                ))
+                
+                while not eval_task.done():
+                    hb = await heartbeat()
+                    if hb: yield hb
+                    await asyncio.sleep(0.5)
+                
+                judge_results, output_guard = await eval_task
+            except asyncio.TimeoutError:
                 logger.warning("Post-stream evaluation timed out, continuing with partial results")
                 judge_results = {}
                 output_guard = None  # Will fall back to raw answer
