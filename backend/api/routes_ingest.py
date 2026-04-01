@@ -5,12 +5,21 @@ import shutil
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from backend.api.security import get_user_id, rate_limit_dependency
-from backend.cache.semantic_cache import get_semantic_cache
 from backend.database.supabase import get_async_supabase, get_supabase
-from backend.ingestion.pipeline import prepare_ingestion, finalize_ingestion
+from backend.ingestion.pipeline import prepare_ingestion
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+class IngestResponse(BaseModel):
+    task_id: str
+    status: str
+    message: str
+    document_id: str | None = None
 
 
 def process_ingestion_task(
@@ -86,12 +95,12 @@ def process_ingestion_task(
 
     except Exception as e:
         logger.error(f"Producer failed for task {task_id}: {e}")
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
             get_supabase().table("ingestion_tasks").update(
-                {"status": "error", "message": f"Queueing failed: {str(e)}"}
+                {"status": "error", "message": f"Queueing failed: {e!s}"}
             ).eq("id", task_id).execute()
-        except Exception:
-            pass
 
 
 @router.post("/ingest", response_model=IngestResponse)
