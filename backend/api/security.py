@@ -1,10 +1,8 @@
 import logging
-import time
 
 from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from upstash_redis import Redis
 
 from backend.config import settings
 

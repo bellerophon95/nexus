@@ -1,6 +1,8 @@
 import logging
 from typing import Any
 
+from qdrant_client import models
+
 from backend.database.qdrant import get_qdrant
 from backend.database.supabase import get_supabase
 from backend.ingestion.embedder import generate_dense_embedding

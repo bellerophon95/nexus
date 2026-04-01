@@ -1,9 +1,10 @@
 import asyncio
 import logging
-from backend.database.supabase import get_supabase
-from backend.ingestion.pipeline import process_single_chunk, finalize_ingestion
-from backend.ingestion.upserter import insert_chunks, upsert_document
+
 from backend.cache.semantic_cache import get_semantic_cache
+from backend.database.supabase import get_supabase
+from backend.ingestion.pipeline import finalize_ingestion, process_single_chunk
+from backend.ingestion.upserter import insert_chunks, upsert_document
 
 logger = logging.getLogger(__name__)
 
@@ -132,10 +133,10 @@ async def run_worker_loop():
         except Exception as e:
             logger.error(f"Ingestion Worker Loop Error: {e}")
             if "chunk_id" in locals():
-                try:
+                import contextlib
+
+                with contextlib.suppress(Exception):
                     supabase.table("ingestion_chunks").update(
                         {"status": "error", "error_message": str(e)}
                     ).eq("id", chunk_id).execute()
-                except:
-                    pass
             await asyncio.sleep(5)
