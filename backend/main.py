@@ -85,6 +85,7 @@ async def startup_event():
 
     # 2. Start Background Ingestion Worker
     from backend.ingestion.worker import run_worker_loop
+
     asyncio.create_task(run_worker_loop())
 
     logger.info(f"Nexus Backend started in {settings.ENV} mode (Asynchronous NLP Loading)")

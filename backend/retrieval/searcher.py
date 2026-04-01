@@ -39,9 +39,7 @@ def search_knowledge_base(
                         models.FieldCondition(
                             key="user_id", match=models.MatchValue(value=user_id)
                         ),
-                        models.IsNullCondition(
-                            is_null=models.PayloadField(key="user_id")
-                        )
+                        models.IsNullCondition(is_null=models.PayloadField(key="user_id")),
                     ]
                 )
 
