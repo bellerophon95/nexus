@@ -197,6 +197,7 @@ async def get_ingest_status(task_id: str):
     Uses synchronous client in a thread to resolve async connection hangs.
     """
     try:
+
         def fetch_task():
             return get_supabase().table("ingestion_tasks").select("*").eq("id", task_id).execute()
 
