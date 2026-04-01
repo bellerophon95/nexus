@@ -58,12 +58,14 @@ async def query_streaming(
             """Yields an SSE comment to keep the connection alive."""
             nonlocal last_heartbeat
             now = time.perf_counter()
-            if now - last_heartbeat > 15:  # Every 15 seconds of silence
+            if now - last_heartbeat > 5:  # Every 5 seconds of silence (Reduced from 15s for stability)
                 last_heartbeat = now
                 return ": heartbeat\n\n"
             return None
 
         print(f"DEBUG: event_generator starting for query: {q[:20]}")
+        # 0. Warming comment to flush proxy buffers immediately
+        yield ": warming connection\n\n"
         yield await yield_agent_step("Nexus", "Initializing Connection", "running")
         yield f"data: {json.dumps({'type': 'activity', 'node': 'router', 'status': 'Analyzing query intent...', 'status_type': 'running'})}\n\n"
         last_heartbeat = time.perf_counter()
@@ -263,10 +265,15 @@ async def query_streaming(
                 )
 
                 while not eval_task.done():
+                    # Check for client disconnect during wait
+                    if await request.is_disconnected():
+                        logger.info("Client disconnected during evaluation")
+                        break
+                        
                     hb = await heartbeat()
                     if hb:
                         yield hb
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.25) # More frequent check (4Hz)
 
                 judge_results, output_guard = await eval_task
             except TimeoutError:

@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Any
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from backend.config import settings
 from backend.observability.tracing import observe
@@ -16,7 +16,7 @@ _openai_client = None
 def get_openai_client():
     global _openai_client
     if _openai_client is None:
-        _openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        _openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
     return _openai_client
 
 
@@ -65,7 +65,7 @@ async def check_hallucination(answer: str, context_chunks: list[dict[str, Any]])
 
     try:
         client = get_openai_client()
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {
