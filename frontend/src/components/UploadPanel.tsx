@@ -53,13 +53,15 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
   const pollTaskStatus = async (taskId: string) => {
     let retryCount = 0;
     const MAX_RETRIES = 3;
+    let isMounted = true;
 
-    const pollInterval = setInterval(async () => {
+    const poll = async () => {
+      if (!isMounted) return;
+
       try {
         const response = await fetch(`${API_BASE_URL}/api/ingest/status/${taskId}`);
         
         if (response.status === 404) {
-          clearInterval(pollInterval);
           setStatus("error");
           setMessage("Ingestion task lost. The server may have restarted.");
           return;
@@ -71,36 +73,39 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
         setProgress(data.progress || 0);
         
         if (data.status === "completed") {
-          clearInterval(pollInterval);
           setStatus("success");
           setMessage(data.message);
           if (onUploadSuccess) {
             onUploadSuccess(data.document_id, data.chunk_count || 0);
           }
         } else if (data.status === "error") {
-          clearInterval(pollInterval);
           setStatus("error");
           setMessage(data.message || "Ingestion failed");
         } else if (data.status === "skipped") {
-          clearInterval(pollInterval);
           setStatus("success");
           setProgress(100);
           setMessage("Document already exists (skipped).");
+        } else {
+          // Continue polling if still pending/processing
+          setTimeout(poll, 1500);
         }
         
-        // Reset retry count on successful response
         retryCount = 0;
       } catch (error) {
         retryCount++;
         if (retryCount >= MAX_RETRIES) {
-          clearInterval(pollInterval);
           setStatus("error");
           setMessage("Connection to ingestion service lost. Retrying manually...");
+        } else {
+          setTimeout(poll, 2000); // Wait bit longer on error
         }
       }
-    }, 1500);
+    };
 
-    return () => clearInterval(pollInterval);
+    // Start initial poll
+    poll();
+
+    return () => { isMounted = false; };
   };
 
   const handleUpload = async () => {
@@ -206,7 +211,7 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
                     {isPersonal ? "Personal Knowledge" : "Shared Library"}
                   </p>
                   <p className="text-[9px] text-slate-500 leading-tight">
-                    {isPersonal ? "Only you can see this" : "Available to all recruiters"}
+                    {isPersonal ? "Only you can see this" : "Available to everybody"}
                   </p>
                 </div>
               </div>

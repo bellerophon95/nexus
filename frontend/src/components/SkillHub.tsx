@@ -70,7 +70,7 @@ export function SkillHub() {
   };
 
   const filteredSkills = skills.filter(skill => 
-    skill.metadata.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    skill.metadata?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     skill.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -161,10 +161,10 @@ export function SkillHub() {
 
                 <div className="mt-3">
                   <h3 className="font-bold text-sm text-slate-200 group-hover:text-white transition-colors uppercase tracking-tight">
-                    {skill.metadata.name || skill.id}
+                    {skill.metadata?.name || skill.id}
                   </h3>
                   <p className="mt-1 text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                    {skill.metadata.description || "No description provided."}
+                    {skill.metadata?.description || "No description provided."}
                   </p>
                 </div>
 

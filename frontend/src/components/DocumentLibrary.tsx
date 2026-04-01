@@ -273,7 +273,7 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
                                 Share Document?
                               </AlertDialogTitle>
                               <AlertDialogDescription className="text-slate-400">
-                                This will make <span className="font-bold text-slate-200">"{doc.title}"</span> available to all users in the Shared Library. 
+                                This will make <span className="font-bold text-slate-200">"{doc.title}"</span> available to everybody in the Shared Library. 
                                 <br /><br />
                                 <span className="text-amber-500/80 text-xs font-medium">
                                   This action is irreversible and will allow others to query this data.

@@ -194,18 +194,18 @@ async def ingest_file(
 async def get_ingest_status(task_id: str):
     """
     Retrieves the status and progress of a background ingestion task.
+    Uses synchronous client in a thread to resolve async connection hangs.
     """
     try:
-        async_supabase = await get_async_supabase()
-        response = (
-            await async_supabase.table("ingestion_tasks").select("*").eq("id", task_id).execute()
-        )
+        def fetch_task():
+            return get_supabase().table("ingestion_tasks").select("*").eq("id", task_id).execute()
+
+        response = await asyncio.to_thread(fetch_task)
 
         if not response.data or len(response.data) == 0:
             raise HTTPException(status_code=404, detail="Ingestion task not found")
 
         task = response.data[0]
-        # Map DB 'id' to result 'task_id' for consistency with UI expectation
         return {
             "task_id": str(task["id"]),
             "status": task["status"],
@@ -214,7 +214,6 @@ async def get_ingest_status(task_id: str):
             "document_id": str(task.get("document_id")) if task.get("document_id") else None,
             "chunk_count": int(task.get("chunk_count", 0)) if task.get("chunk_count") else 0,
         }
-
     except HTTPException:
         raise
     except Exception as e:

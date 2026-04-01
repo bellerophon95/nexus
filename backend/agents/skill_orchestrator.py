@@ -65,8 +65,8 @@ class SkillOrchestrator:
         candidate_list = [
             {
                 "id": s["id"],
-                "name": s["metadata"].get("name", s["id"]),
-                "description": s["metadata"].get("description", ""),
+                "name": s.get("metadata", {}).get("name", s["id"]),
+                "description": s.get("metadata", {}).get("description", ""),
             }
             for s in self.skills_index[
                 :100
