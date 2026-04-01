@@ -164,7 +164,9 @@ async def ingest_file(
         )
 
         # Add to background tasks (Runs in separate thread since process_ingestion_task is 'def')
-        background_tasks.add_task(process_ingestion_task, task_id, file_path, file.filename, is_personal)
+        background_tasks.add_task(
+            process_ingestion_task, task_id, file_path, file.filename, is_personal
+        )
 
         return IngestResponse(
             task_id=task_id,

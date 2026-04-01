@@ -15,10 +15,10 @@ client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 @observe(name="Generate RAG Answer")
 async def generate_answer(
-    query: str, 
-    context_chunks: list[dict[str, Any]], 
+    query: str,
+    context_chunks: list[dict[str, Any]],
     history: list[dict[str, Any]] | None = None,
-    skill_prompt: str = ""
+    skill_prompt: str = "",
 ) -> str:
     """
     Generates a natural language answer based on the provided query, context, and history.
@@ -43,7 +43,7 @@ async def generate_answer(
         "are using your general knowledge because no specific documents were found. "
         "Be professional, precise, and helpful. Use clear Markdown formatting."
     )
-    
+
     if skill_prompt:
         system_prompt += f"\n\n{skill_prompt}"
 
@@ -93,10 +93,10 @@ async def generate_answer(
 
 @observe(name="Generate RAG Answer Stream")
 async def generate_answer_stream(
-    query: str, 
-    context_chunks: list[dict[str, Any]], 
+    query: str,
+    context_chunks: list[dict[str, Any]],
     history: list[dict[str, Any]] | None = None,
-    skill_prompt: str = ""
+    skill_prompt: str = "",
 ):
     """
     Generates a natural language answer using streaming with multi-turn history support.

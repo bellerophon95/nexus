@@ -55,6 +55,7 @@ def delete_document(document_id: str):
         logger.error(f"Failed to delete document {document_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/{document_id}/share")
 @observe(name="Share Document")
 def share_document(document_id: str):

@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
+from backend.api.routes_skills import get_orchestrator
 from backend.api.security import get_user_id, rate_limit_dependency
 from backend.cache.semantic_cache import get_semantic_cache
 from backend.database.chat import create_conversation, get_messages, save_message, sync_user
@@ -15,7 +16,6 @@ from backend.guardrails.input_guard import run_input_guardrails
 from backend.guardrails.output_guard import run_output_guardrails
 from backend.retrieval.generator import generate_answer_stream, generate_title
 from backend.retrieval.searcher import search_knowledge_base
-from backend.api.routes_skills import get_orchestrator
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

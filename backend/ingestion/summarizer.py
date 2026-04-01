@@ -1,4 +1,5 @@
 import logging
+
 from openai import OpenAI
 
 from backend.config import settings
