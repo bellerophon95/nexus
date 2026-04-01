@@ -221,7 +221,9 @@ async def query_streaming(
                 )
             )
 
-            output_guard_task = asyncio.create_task(run_output_guardrails(full_answer, context_chunks))
+            output_guard_task = asyncio.create_task(
+                run_output_guardrails(full_answer, context_chunks)
+            )
 
             # Wait for both with a reasonable timeout to prevent UI "hang"
             # If evaluation takes too long, we'll continue with partial data
@@ -231,7 +233,7 @@ async def query_streaming(
                     asyncio.wait_for(judge_task, timeout=4.0),
                     asyncio.wait_for(output_guard_task, timeout=4.0),
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Post-stream evaluation timed out, continuing with partial results")
                 judge_results = {}
                 output_guard = None  # Will fall back to raw answer

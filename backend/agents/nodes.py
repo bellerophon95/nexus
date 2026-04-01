@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import Any
 
@@ -172,14 +171,14 @@ async def validator_node(state: NexusState) -> dict[str, Any]:
 
     # Use the new async self_rag utility
     rag_result = await check_hallucination(state["final_answer"], state["retrieved_chunks"])
-    
+
     passed = rag_result.get("passed", False)
     score = rag_result.get("hallucination_score", 1.0)
     reasoning = rag_result.get("reasoning", "No reasoning provided.")
     unsupported = rag_result.get("unsupported_claims", [])
 
     status = "approved" if passed else "rejected"
-    
+
     feedback = reasoning
     if unsupported:
         feedback += f" Unsupported claims: {', '.join(unsupported)}"
@@ -192,8 +191,8 @@ async def validator_node(state: NexusState) -> dict[str, Any]:
         "activity_log": [
             {
                 "node": "validator",
-                "status": f"Validation {status}: { (1-score)*100:.0f}% faithfulness score.",
-                "details": reasoning
+                "status": f"Validation {status}: {(1 - score) * 100:.0f}% faithfulness score.",
+                "details": reasoning,
             }
         ],
     }
