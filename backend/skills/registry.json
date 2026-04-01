@@ -1,0 +1,13 @@
+[
+  {
+    "id": "financial_analyst",
+    "path": "backend/skills/financial_analyst",
+    "metadata": {
+      "name": "Senior Financial Consultant",
+      "description": "Expert in balance sheet analysis, cash flow forecasting, and equity research.",
+      "role": "Lead Investment Strategist",
+      "expertise": ["Financial Modeling", "QoQ/YoY Growth Analysis", "Risk Assessment"],
+      "category": "Finance"
+    }
+  }
+]

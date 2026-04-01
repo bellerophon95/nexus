@@ -21,11 +21,10 @@ def get_orchestrator():
 
 @router.get("/skills/index", tags=["Skills"])
 async def get_skills_index(orchestrator: SkillOrchestrator = Depends(get_orchestrator)):
-    """Returns the full index of available skills from Awesome Skills."""
-    await orchestrator.sync_manifests()
+    """Returns the full index of available skills from the local Nexus registry."""
+    await orchestrator.load_local_skills()
     return {
         "skills": orchestrator.skills_index,
-        "bundles": orchestrator.bundles,
         "count": len(orchestrator.skills_index),
     }
 

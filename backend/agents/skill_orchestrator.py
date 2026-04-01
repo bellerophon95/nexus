@@ -1,8 +1,8 @@
 import asyncio
 import json
 import logging
+import os
 
-import httpx
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
@@ -10,75 +10,65 @@ logger = logging.getLogger(__name__)
 
 class SkillOrchestrator:
     """
-    Manages the orchestration of 'antigravity-awesome-skills'.
-    Uses a lazy-loading strategy to inject only relevant skills into the agent context.
+    Manages the orchestration of local 'Nexus Skills'.
+    Uses a filesystem-based strategy to inject only relevant skills into the agent context.
     """
 
-    BASE_URL = "https://raw.githubusercontent.com/sickn33/antigravity-awesome-skills/main"
-    INDEX_PATH = "/data/skills_index.json"
-    BUNDLES_PATH = "/data/bundles.json"
+    SKILLS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "skills")
+    REGISTRY_PATH = os.path.join(SKILLS_DIR, "registry.json")
 
     def __init__(self, api_key: str):
         self.client = AsyncOpenAI(api_key=api_key)
         self.skills_index: list[dict] = []
-        self.bundles: dict[str, list[str]] = {}
-        self.last_sync = 0
-        self._sync_lock = asyncio.Lock()
+        self.last_load = 0
+        self._load_lock = asyncio.Lock()
 
-    async def sync_manifests(self):
-        """Fetches the latest skills index and bundles from GitHub."""
-        async with self._sync_lock:
-            # Simple caching for 1 hour
-            import time
-
-            if time.time() - self.last_sync < 3600 and self.skills_index:
-                return
-
+    async def load_local_skills(self):
+        """Loads the latest skills index from the local registry."""
+        async with self._load_lock:
+            # Simple caching mechanism for the local filesystem (re-scan only if registry changed or manually triggered)
+            # For now, we'll reload it every time for ease of development during this migration.
             try:
-                async with httpx.AsyncClient() as client:
-                    index_resp = await client.get(f"{self.BASE_URL}{self.INDEX_PATH}")
-                    bundles_resp = await client.get(f"{self.BASE_URL}{self.BUNDLES_PATH}")
-
-                    if index_resp.status_code == 200:
-                        self.skills_index = index_resp.json()
-                    if bundles_resp.status_code == 200:
-                        self.bundles = bundles_resp.json()
-
-                    self.last_sync = time.time()
-                    logger.info(
-                        f"Synced {len(self.skills_index)} skills and {len(self.bundles)} bundles."
-                    )
+                if os.path.exists(self.REGISTRY_PATH):
+                    with open(self.REGISTRY_PATH) as f:
+                        self.skills_index = json.load(f)
+                    logger.info(f"Loaded {len(self.skills_index)} local skills from registry.")
+                else:
+                    logger.warning(f"Skill registry not found at {self.REGISTRY_PATH}")
+                    self.skills_index = []
             except Exception as e:
-                logger.error(f"Failed to sync skill manifests: {e}")
+                logger.error(f"Failed to load local skill manifests: {e}")
+                self.skills_index = []
 
     async def get_relevant_skills(self, query: str, top_k: int = 3) -> list[dict]:
         """Uses LLM to select the most relevant skills for a given query."""
-        await self.sync_manifests()
+        await self.load_local_skills()
 
         if not self.skills_index:
             return []
 
-        # Prepare a shortened list for the LLM to choose from (ID and Description)
-        # In a real production scenario with 1,300+ skills, we would use vector search here.
-        # For Nexus, we filter by category or use a subset of popular skills first.
-
-        candidate_list = [
-            {
-                "id": s["id"],
-                "name": s.get("metadata", {}).get("name", s["id"]),
-                "description": s.get("metadata", {}).get("description", ""),
-            }
-            for s in self.skills_index[
-                :100
-            ]  # Limiting to top 100 for token efficiency in this first version
-        ]
+        # Prepare a list of candidates including the new role/expertise metadata
+        candidate_list = []
+        for s in self.skills_index:
+            meta = s.get("metadata", {})
+            candidate_list.append(
+                {
+                    "id": s["id"],
+                    "role": meta.get("role", "General Analyst"),
+                    "name": meta.get("name", s["id"]),
+                    "description": meta.get("description", ""),
+                    "expertise": meta.get("expertise", []),
+                }
+            )
 
         prompt = f"""
         Given the user query: "{query}"
+
+        Identify the top {top_k} most relevant expert skill roles from the following list.
+        Each role has specific expertise and instructions.
         
-        Identify the top {top_k} most relevant skills from the following list that would help an AI agent answer this query accurately.
         Return ONLY a JSON list of skill IDs.
-        
+
         Available Skills:
         {json.dumps(candidate_list, indent=2)}
         """
@@ -87,14 +77,19 @@ class SkillOrchestrator:
             response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a Skill Orchestrator for an AI agent."},
+                    {
+                        "role": "system",
+                        "content": "You are the Nexus Skill Orchestrator. Select the best expert roles for the task.",
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 response_format={"type": "json_object"},
             )
 
             result = json.loads(response.choices[0].message.content)
-            selected_ids = result.get("selected_ids", []) or result.get("skills", [])
+            selected_ids = (
+                result.get("selected_ids", []) or result.get("skills", []) or result.get("ids", [])
+            )
 
             # Map IDs back to full skill objects
             relevant = [s for s in self.skills_index if s["id"] in selected_ids]
@@ -105,36 +100,47 @@ class SkillOrchestrator:
             return []
 
     async def fetch_skill_content(self, skill_id: str) -> str | None:
-        """Fetches the actual SKILL.md content for a specific skill."""
+        """Fetches the actual SKILL.md content from the local filesystem."""
         skill = next((s for s in self.skills_index if s["id"] == skill_id), None)
         if not skill:
             return None
 
-        path = skill.get("path", f"skills/{skill_id}")
-        url = f"{self.BASE_URL}/{path}/SKILL.md"
+        # Determine path to SKILL.md
+        skill_dir = os.path.join(self.SKILLS_DIR, skill_id)
+        skill_md_path = os.path.join(skill_dir, "SKILL.md")
 
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(url)
-                if resp.status_code == 200:
-                    return resp.text
+            if os.path.exists(skill_md_path):
+                with open(skill_md_path) as f:
+                    return f.read()
+            else:
+                logger.warning(f"SKILL.md not found for {skill_id} at {skill_md_path}")
         except Exception as e:
-            logger.error(f"Failed to fetch content for skill {skill_id}: {e}")
+            logger.error(f"Failed to read SKILL.md for skill {skill_id}: {e}")
         return None
 
     async def get_orchestration_prompt(self, query: str) -> str:
-        """Generates a combined prompt block containing relevant skills."""
+        """Generates a combined prompt block containing relevant skills and their roles."""
         relevant_skills = await self.get_relevant_skills(query)
         if not relevant_skills:
             return ""
 
-        prompt_parts = ["\n### RELEVANT SKILLS INJECTED\n"]
+        prompt_parts = ["\n### SPECIALIZED SKILLS & EXPERT ROLES INJECTED\n"]
 
         tasks = [self.fetch_skill_content(s["id"]) for s in relevant_skills]
         contents = await asyncio.gather(*tasks)
 
         for skill, content in zip(relevant_skills, contents, strict=True):
             if content:
-                prompt_parts.append(f"#### Skill: {skill['id']}\n{content}\n")
+                role = skill.get("metadata", {}).get("role", "Expert Analyst")
+                expertise = ", ".join(skill.get("metadata", {}).get("expertise", []))
+
+                parts = [
+                    f"#### [Agent: {role}]",
+                    f"**Expertise**: {expertise}" if expertise else "",
+                    content,
+                    "---",
+                ]
+                prompt_parts.append("\n".join([p for p in parts if p]))
 
         return "\n".join(prompt_parts)
