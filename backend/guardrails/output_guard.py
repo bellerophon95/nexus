@@ -1,7 +1,9 @@
 import logging
+from typing import Any
 
 from backend.guardrails.models import GuardResult
 from backend.observability.tracing import observe
+from backend.retrieval.self_rag import check_hallucination
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +54,9 @@ def get_analyzer():
 
 
 @observe(name="Output Guardrails")
-def run_output_guardrails(answer: str) -> GuardResult:
+async def run_output_guardrails(answer: str, context_chunks: list[dict[str, Any]] = None) -> GuardResult:
     """
-    Checks the generated answer for PII leakage and profanity/toxicity.
+    Checks the generated answer for PII leakage, profanity/toxicity, and hallucinations (Self-RAG).
     """
     # 1. Profanity Check
     profanity = get_profanity()
@@ -67,7 +69,23 @@ def run_output_guardrails(answer: str) -> GuardResult:
             metadata={"guardrail": "output_profanity"},
         )
 
-    # 2. PII Leak Detection
+    # 2. Self-RAG Hallucination Detection (Cost-Optimized)
+    hallucination_metadata = {}
+    if context_chunks:
+        try:
+            rag_result = await check_hallucination(answer, context_chunks)
+            if not rag_result.get("passed"):
+                logger.warning(f"Hallucination detected! Score={rag_result.get('hallucination_score')}")
+                # We don't always block the response, but we add alerts/warnings
+                hallucination_metadata = {
+                    "hallucination_score": rag_result.get("hallucination_score"),
+                    "unsupported_claims": rag_result.get("unsupported_claims"),
+                    "validation_reasoning": rag_result.get("reasoning")
+                }
+        except Exception as e:
+            logger.error(f"Self-RAG check failed: {e}")
+
+    # 3. PII Leak Detection
     pii_types = []
     warnings = []
     analyzer = get_analyzer()
@@ -81,6 +99,14 @@ def run_output_guardrails(answer: str) -> GuardResult:
         except Exception as e:
             logger.error(f"PII analysis failed in output: {e}")
 
+    # Combine warnings
+    if hallucination_metadata:
+        warnings.append(f"Hallucination Risk: {hallucination_metadata.get('hallucination_score') * 100:.0f}%")
+
     return GuardResult(
-        passed=True, sanitized_content=answer, pii_detected=pii_types, warnings=warnings
+        passed=True, 
+        sanitized_content=answer, 
+        pii_detected=pii_types, 
+        warnings=warnings,
+        metadata=hallucination_metadata
     )

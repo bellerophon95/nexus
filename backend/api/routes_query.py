@@ -221,17 +221,17 @@ async def query_streaming(
                 )
             )
 
-            output_guard_task = asyncio.to_thread(run_output_guardrails, full_answer)
+            output_guard_task = asyncio.create_task(run_output_guardrails(full_answer, context_chunks))
 
             # Wait for both with a reasonable timeout to prevent UI "hang"
             # If evaluation takes too long, we'll continue with partial data
             try:
-                # Give it up to 3 seconds for GPT-4o-mini to respond
+                # Give it up to 4 seconds for GPT-4o-mini to respond
                 judge_results, output_guard = await asyncio.gather(
                     asyncio.wait_for(judge_task, timeout=4.0),
-                    asyncio.wait_for(output_guard_task, timeout=2.0),
+                    asyncio.wait_for(output_guard_task, timeout=4.0),
                 )
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 logger.warning("Post-stream evaluation timed out, continuing with partial results")
                 judge_results = {}
                 output_guard = None  # Will fall back to raw answer

@@ -2,6 +2,7 @@ import logging
 from typing import Any
 
 from backend.database.supabase import get_supabase
+from backend.database.qdrant import get_qdrant
 from backend.ingestion.embedder import generate_dense_embedding
 from backend.observability.tracing import observe
 from backend.retrieval.reranker import rerank_results
@@ -23,26 +24,46 @@ def search_knowledge_base(
             logger.error("Failed to generate query embedding.")
             return []
 
-        # 2. Call Supabase RPC for hybrid search
-        # match_count is high so we have enough candidates for reranking
+        # 2. Call Qdrant for dense search
         match_count = limit * 3 if rerank else limit
-
-        response = (
-            get_supabase()
-            .rpc(
-                "match_hybrid_chunks",
-                {
-                    "query_embedding": query_embedding,
-                    "query_text": query,
-                    "match_threshold": match_threshold,
-                    "match_count": match_count,
-                },
+        
+        try:
+            qdrant_response = get_qdrant().search(
+                collection_name="nexus_chunks",
+                query_vector=query_embedding,
+                limit=match_count,
+                with_payload=True
             )
-            .execute()
-        )
-
-        initial_results = response.data if response.data else []
-        logger.info(f"Retrieved {len(initial_results)} results from hybrid search.")
+            
+            initial_results = []
+            for hit in qdrant_response:
+                initial_results.append({
+                    "id": hit.id,
+                    "text": hit.payload.get("text"),
+                    "score": hit.score,
+                    "document_id": hit.payload.get("document_id"),
+                    "metadata": hit.payload
+                })
+                
+            logger.info(f"Retrieved {len(initial_results)} results from Qdrant dense search.")
+            
+        except Exception as qe:
+            logger.warning(f"Qdrant search failed, falling back to Supabase RPC: {qe}")
+            # Fallback to Supabase RPC for hybrid search
+            response = (
+                get_supabase()
+                .rpc(
+                    "match_hybrid_chunks",
+                    {
+                        "query_embedding": query_embedding,
+                        "query_text": query,
+                        "match_threshold": match_threshold,
+                        "match_count": match_count,
+                    },
+                )
+                .execute()
+            )
+            initial_results = response.data if response.data else []
 
         # 3. Optional Reranking
         if rerank and initial_results:

@@ -9,6 +9,7 @@ from backend.agents.state import NexusState
 from backend.agents.tools import NEXUS_TOOLS
 from backend.config import settings
 from backend.observability.tracing import observe
+from backend.retrieval.self_rag import check_hallucination
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ llm = ChatOpenAI(model="gpt-4o-mini", api_key=settings.OPENAI_API_KEY, temperatu
 
 
 @observe()
-def supervisor_node(state: NexusState) -> dict[str, Any]:
+async def supervisor_node(state: NexusState) -> dict[str, Any]:
     """
     Acts as the orchestrator, deciding which agent to call next.
     """
@@ -69,7 +70,7 @@ def supervisor_node(state: NexusState) -> dict[str, Any]:
 
 
 @observe()
-def researcher_node(state: NexusState) -> dict[str, Any]:
+async def researcher_node(state: NexusState) -> dict[str, Any]:
     """
     Executes search and compiles context.
     """
@@ -119,7 +120,7 @@ def researcher_node(state: NexusState) -> dict[str, Any]:
 
 
 @observe()
-def analyst_node(state: NexusState) -> dict[str, Any]:
+async def analyst_node(state: NexusState) -> dict[str, Any]:
     """
     Synthesizes the context into a final answer.
     """
@@ -160,47 +161,39 @@ def analyst_node(state: NexusState) -> dict[str, Any]:
 
 
 @observe()
-def validator_node(state: NexusState) -> dict[str, Any]:
+async def validator_node(state: NexusState) -> dict[str, Any]:
     """
-    Checks for hallucinations.
+    Checks for hallucinations using the cost-optimized LLM-based Self-RAG utility.
     """
     logger.info("Entering Validator node")
 
-    context_text = "\n".join([c["text"] for c in state["retrieved_chunks"]])
+    if not state.get("final_answer"):
+        return {"validation_status": "pending", "current_agent": "supervisor"}
 
-    system_prompt = (
-        "You are the Quality Validator for Project Nexus. Your task is to check the Analyst's response "
-        "against the provided Context chunks. Look for hallucinations, inaccuracies, or claims not supported by the context.\n\n"
-        "Return a JSON object with:\n"
-        "- score: 0 to 1 (1 = fully supported, 0 = complete hallucination)\n"
-        "- feedback: Detailed explanation of any issues found."
-    )
+    # Use the new async self_rag utility
+    rag_result = await check_hallucination(state["final_answer"], state["retrieved_chunks"])
+    
+    passed = rag_result.get("passed", False)
+    score = rag_result.get("hallucination_score", 1.0)
+    reasoning = rag_result.get("reasoning", "No reasoning provided.")
+    unsupported = rag_result.get("unsupported_claims", [])
 
-    user_prompt = f"Context:\n{context_text}\n\nAnalyst Response:\n{state['final_answer']}"
+    status = "approved" if passed else "rejected"
+    
+    feedback = reasoning
+    if unsupported:
+        feedback += f" Unsupported claims: {', '.join(unsupported)}"
 
-    response = llm.invoke([SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)])
-
-    try:
-        # Clean potential markdown if LLM includes it
-        content = response.content.replace("```json", "").replace("```", "").strip()
-        data = json.loads(content)
-
-        status = "approved" if data["score"] > 0.7 else "rejected"
-        return {
-            "validation_status": status,
-            "hallucination_score": 1 - data["score"],
-            "messages": [AIMessage(content=f"Validator feedback: {data['feedback']}")],
-            "current_agent": "supervisor",
-            "activity_log": [
-                {
-                    "node": "validator",
-                    "status": f"Validation {status}: {data['score'] * 100}% faithfulness.",
-                }
-            ],
-        }
-    except Exception as e:
-        logger.error(f"Validator JSON parsing failed: {e}")
-        return {
-            "validation_status": "approved",  # Fallback
-            "current_agent": "supervisor",
-        }
+    return {
+        "validation_status": status,
+        "hallucination_score": score,
+        "messages": [AIMessage(content=f"Validator feedback: {feedback}")],
+        "current_agent": "supervisor",
+        "activity_log": [
+            {
+                "node": "validator",
+                "status": f"Validation {status}: { (1-score)*100:.0f}% faithfulness score.",
+                "details": reasoning
+            }
+        ],
+    }

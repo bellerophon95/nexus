@@ -82,7 +82,10 @@ async def chat_agents(request: ChatRequest):
 
                 # Output Guardrail on final answer
                 if safe_updates["final_answer"]:
-                    output_guard = run_output_guardrails(safe_updates["final_answer"])
+                    output_guard = await run_output_guardrails(
+                        safe_updates["final_answer"], 
+                        updates.get("retrieved_chunks", [])
+                    )
                     if not output_guard.passed:
                         safe_updates["final_answer"] = output_guard.sanitized_content
                         safe_updates["status"] = "blocked"
@@ -134,7 +137,10 @@ async def ask_agent(request: ChatRequest, background_tasks: BackgroundTasks):
 
         # 2. Output Guardrails
         if settings.GUARDRAILS_ENABLED:
-            output_guard = run_output_guardrails(answer)
+            output_guard = await run_output_guardrails(
+                answer, 
+                final_state.get("retrieved_chunks", [])
+            )
             answer = output_guard.sanitized_content
             pii_types.extend(output_guard.pii_detected)
 

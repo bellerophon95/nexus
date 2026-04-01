@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "instance_type" {
   description = "EC2 instance size"
   type        = string
-  default     = "t3a.medium" # Cheapest 4GB instance in us-east-1
+  default     = "t3.small" # 2GB RAM is sufficient after RAM-optimized Self-RAG
 }
 
 variable "ami_id" {

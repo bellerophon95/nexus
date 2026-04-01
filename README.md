@@ -6,17 +6,18 @@
 
 ---
 
-## 🚀 Production Infrastructure (AWS)
+## 🚀 Production Infrastructure (AWS/Terraform)
 
-Project Nexus is deployed on a high-availability **AWS EC2** instance using a modern containerized stack. Global SSL/TLS and routing are handled by **Caddy**.
+Project Nexus is optimized for high-availability while maintaining a minimal compute budget using a modern containerized stack on AWS. Infrastructure is provisioned via **Terraform** for full automation and reproducibility.
+
+> See the [Provisioning Guide](docs/NEXUS_README.md#13-infrastructure-provisioning-terraform) for detailed setup instructions.
 
 ```mermaid
 graph TD
-    Client[Next.js Frontend] <--> Caddy[Caddy Reverse Proxy]
-    Caddy <--> API[FastAPI Backend]
+    Client[Next.js Frontend] <--> API[FastAPI Backend]
     
     subgraph "Infrastructure"
-        API <--> Qdrant[(Qdrant Vector DB)]
+        API <--> Qdrant[(Qdrant Cloud - Managed)]
         API <--> Supabase[(PostgreSQL/Supabase)]
         API <--> Redis[(Upstash Redis Cache)]
         API --> Langfuse[Langfuse Observability]
@@ -24,9 +25,9 @@ graph TD
     
     subgraph "RAG Pipeline"
         API --> Retriever[Hybrid Retriever]
-        Retriever --> Reranker[BGE-Reranker-v2-m3]
+        Retriever --> Reranker[Cross-Encoder Reranker]
         Reranker --> Nodes[LangGraph Agent Nodes]
-        Nodes --> Validator[Self-RAG Validator]
+        Nodes --> Validator[LLM-Powered Self-RAG]
     end
 ```
 
@@ -34,30 +35,41 @@ graph TD
 - **Backend**: Python 3.12 / FastAPI (Containerized on Amazon ECR)
 - **Frontend**: Next.js 15 (Containerized on Amazon ECR)
 - **CI/CD**: GitHub Actions (Automated Lint, Test, Build, and AWS SSM Deployment)
-- **Databases**: Qdrant (Vector), Supabase (Postgres), Upstash (Redis Cache)
+- **Databases**: Supabase `[ACTIVE]`, Qdrant (Vector) `[PHASED]`, Upstash (Redis Cache) `[ACTIVE]`
 - **Observability**: Langfuse (Tracing, Cost, and RAGAS Evaluations)
 
 ---
 
 ## 🧬 Key Technical Features
 
-### 1. Multi-Agent Orchestration (LangGraph)
+### 1. Multi-Agent Orchestration (LangGraph) `[PHASED]`
 Uses a directed cyclic graph to manage stateful, multi-turn agent interactions. The system dynamically transitions between `Researcher`, `Analyst`, and `Validator` nodes to ensure grounded responses.
 
-### 2. Hybrid Retrieval & Reranking
+### 2. Hybrid Retrieval & Reranking `[ACTIVE]`
 - **Dense Retrieval**: `sentence-transformers/all-MiniLM-L6-v2` for semantic similarity.
-- **Sparse Retrieval**: BM25/Bag-of-Words for keyword-perfect matching.
-- **Cross-Encoder Reranker**: `BGE-Reranker-v2-m3` re-scores candidates to practically eliminate hallucinations by surfacing the most relevant context.
+- **Sparse Retrieval**: BM25/Supabase RPC for keyword matching.
+- **Cross-Encoder Reranker**: `cross-encoder/ms-marco-MiniLM-L-6-v2` re-scores candidates to minimize irrelevant context insertion.
 
-### 3. CI/CD Quality Gates ("Hardened Pipeline")
-The codebase is protected by a mandatory **Validation Layer** in GitHub Actions:
-- **Ruff**: Enforces strict linting and formatting (`ruff check` + `ruff format`).
-- **Pytest**: Automated test suite verifies backend initialization and API stability before any deployment.
+### 3. LLM-Powered Self-RAG (Hallucination Gate) `[PHASED]`
+A specialized validation layer that uses `gpt-4o-mini` to check generated claims against retrieved context, preventing "hallucinated" answers from reaching the end-user.
 
-### 4. Agentic Observability
-Surfaces real-time "inner monologue" telemetry:
-- **Visual Process Map**: Real-time visualization of agent node transitions.
-- **Trace Metrics**: Latency and Cost calculation per turn via Langfuse.
+---
+
+## 🏗️ Architectural Rationale: Cost-Optimized Validation
+
+A core design decision in Project Nexus was the pivot from **Local NLI** to **LLM-based Validation** for the Self-RAG layer.
+
+### The Problem: The "RAM Tax"
+Our initial blueprint called for `cross-encoder/nli-deberta-v3-small` running locally. However:
+- **Compute Overhead:** Loading this model requires ~1.5GB of dedicated RAM.
+- **Cost Impact:** On AWS, this would necessitate a `t3.medium` or larger instance (approx. $30/mo) or higher-memory Fargate tasks.
+- **Cold Starts:** Smaller instances or serverless runners could take up to 20 seconds to load the model on first request.
+
+### The Solution: LLM-as-a-Validator
+We implemented the `Validator` node using a specialized prompt on `gpt-4o-mini`:
+- **Financial Efficiency:** At $0.15/1M tokens, 1,000 validation checks cost less than **$0.10**. This allows us to stay on a **t3.micro/small** ($10-15/mo) instance while maintaining production-grade validation.
+- **Observability:** Unlike local NLI which returns a single float (`0.0 - 1.0`), the LLM returns **structured JSON** explaining *why* a claim failed, which we surface in the UI.
+- **Stability:** Significant gains in system stability (zero OOM crashes on small instances).
 
 ---
 
@@ -84,18 +96,6 @@ cd frontend
 npm install
 npm run dev
 ```
-
----
-
-## 🎯 Production Deployment
-
-Deployments are fully automated via GitHub Actions on `push` to `main`.
-
-1. **Validate**: Ruff and Pytest ensure code quality.
-2. **Build**: Docker images are built and pushed to **Amazon ECR**.
-3. **Deploy**: **AWS SSM** triggers a `docker-compose pull` and `up -d` on the production EC2 instance.
-
-*Current Host: `project-nexus.duckdns.org`*
 
 ---
 

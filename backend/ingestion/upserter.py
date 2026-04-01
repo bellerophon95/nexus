@@ -2,6 +2,8 @@ import logging
 from typing import Any
 
 from backend.database.supabase import get_supabase
+from backend.database.qdrant import get_qdrant, init_qdrant_collection
+from qdrant_client import models
 from backend.observability.tracing import observe
 
 logger = logging.getLogger(__name__)
@@ -65,12 +67,40 @@ def insert_chunks(document_id: str, chunks_data: list[dict[str, Any]]):
         if not payload:
             return
 
-        # Batch insert
+        # Supabase Batch insert
         response = get_supabase().table("chunks").insert(payload).execute()
 
         if not response.data:
             logger.error(f"Supabase chunk insert returned no data: {response}")
-            raise Exception("Failed to insert chunks.")
+            raise Exception("Failed to insert chunks to Supabase.")
+
+        # Qdrant Batch insert (Dual persistence)
+        # Ensure collection exists first
+        init_qdrant_collection()
+        
+        qdrant_points = []
+        for i, chunk in enumerate(chunks_data):
+            # Using the same metadata as Supabase for consistency
+            point = models.PointStruct(
+                id=response.data[i]["id"],  # Use Supabase UUID as Qdrant ID
+                vector=chunk["embedding"],
+                payload={
+                    "document_id": document_id,
+                    "text": chunk["text"],
+                    "token_count": chunk["token_count"],
+                    "entities": chunk["entities"],
+                    "topics": chunk["topics"],
+                    "key_phrases": chunk["key_phrases"],
+                }
+            )
+            qdrant_points.append(point)
+
+        if qdrant_points:
+            get_qdrant().upsert(
+                collection_name="nexus_chunks",
+                points=qdrant_points
+            )
+            logger.info(f"Successfully upserted {len(qdrant_points)} points to Qdrant.")
 
         logger.info(f"Successfully inserted {len(payload)} chunks for document {document_id}")
     except Exception as e:

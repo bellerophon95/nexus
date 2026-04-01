@@ -41,20 +41,19 @@ NEXUS is a domain-agnostic research intelligence platform that:
 
 ### Key Techniques Demonstrated
 
-| Technique | Implementation |
-|---|---|
-| Multi-Agent Orchestration | LangGraph StateGraph with Supervisor/Worker pattern |
-| Adaptive RAG | Query complexity classifier routing to 3 tiers |
-| Hybrid Search | Dense (sentence-transformers) + Sparse (BM25) + RRF |
-| Cross-Encoder Reranking | ms-marco-MiniLM-L-6-v2 reranker on fused results |
-| Self-RAG Validation | NLI relevance gate with re-retrieval loop |
-| Semantic Chunking | Cosine-breakpoint splitting with parent-child hierarchy |
-| Guardrails (Input) | Prompt injection detection, PII anonymization, topic restriction |
-| Guardrails (Output) | Hallucination NLI scoring, citation verification, toxicity filter |
-| Evaluation Pipeline | RAGAS metrics + LLM-as-Judge + golden dataset regression |
-| Observability | Langfuse tracing, cost tracking, latency budgets, drift alerts |
-| Semantic Caching | Cosine-similarity cache in Upstash Redis |
-| Streaming | Server-Sent Events (SSE) token-by-token streaming |
+| Technique | Implementation | Status |
+|---|---|---|
+| Multi-Agent Orchestration | LangGraph StateGraph with Supervisor/Worker pattern | `[PHASED]` |
+| Adaptive RAG | Query complexity classifier routing to 3 tiers | `[ACTIVE]` |
+| Hybrid Search | Dense (MiniLM) + Sparse (Supabase RPC) + Qdrant | `[PHASED]` |
+| Cross-Encoder Reranking | `ms-marco-MiniLM-L-6-v2` reranker on fused results | `[ACTIVE]` |
+| Self-RAG Validation | LLM-based (gpt-4o-mini) hallucination gate | `[PHASED]` |
+| Semantic Chunking | Cosine-breakpoint splitting with parent-child hierarchy | `[ACTIVE]` |
+| Guardrails (Input) | PII anonymization, BetterProfanity, topic restriction | `[ACTIVE]` |
+| Guardrails (Output) | LLM-as-Judge hallucination scoring, toxicity filter | `[PHASED]` |
+| Evaluation Pipeline | RAGAS metrics + Langfuse observability | `[ACTIVE]` |
+| Semantic Caching | Cosine-similarity cache in Upstash Redis | `[ACTIVE]` |
+| Streaming | Server-Sent Events (SSE) token-by-token streaming | `[ACTIVE]` |
 
 ---
 
@@ -89,13 +88,14 @@ NEXUS is a domain-agnostic research intelligence platform that:
 │       └── Tier 3: Agentic Multi-Hop (complex reasoning)            │
 │                                                                     │
 │  Hybrid Retrieval (for Tier 2+3):                                   │
-│    Dense (Qdrant, top-50) + Sparse (BM25, top-50)                  │
+│    Dense (Supabase/MiniLM) + Sparse (Supabase RPC)                 │
+│    Qdrant (Cloud) `[PHASED]`                                       │
 │       ▼                                                             │
 │    Reciprocal Rank Fusion (k=60) → top-20                          │
 │       ▼                                                             │
-│    Cross-Encoder Rerank → top-5                                     │
+│    Cross-Encoder Rerank `[ACTIVE]` → top-5                         │
 │       ▼                                                             │
-│    Self-RAG Gate (relevance ≥ 0.7 or re-retrieve)                  │
+│    Self-RAG LLM Gate `[PHASED]` (gpt-4o-mini validator)            │
 ├─────────────────────────────────────────────────────────────────────┤
 │  LAYER 3 — AGENT ORCHESTRATION (LangGraph)                          │
 │                                                                     │
@@ -144,7 +144,7 @@ nexus/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                    # Lint + test + RAGAS regression
-│       └── deploy.yml                # Deploy to Railway + Vercel
+│       └── deploy.yml                # Deploy to AWS (ECR + ECS/EC2)
 │
 ├── backend/
 │   ├── main.py                       # FastAPI app entrypoint
@@ -297,7 +297,7 @@ CACHE_TTL_SECONDS=86400
 # ── App ──
 APP_ENV=production
 LOG_LEVEL=INFO
-CORS_ORIGINS=https://nexus-app.vercel.app
+CORS_ORIGINS=https://nexus.yourdomain.com
 ```
 
 ### `config.py`
@@ -1115,27 +1115,16 @@ class NexusState(BaseModel):
 Routes queries to the appropriate processing tier.
 
 Classification approach:
-- Primary: Fine-tuned DeBERTa-v3-small classifier (2K labeled examples)
-- Fallback: LLM-based classification (few-shot prompt)
-
-Features used for classification:
-- Query length (token count)
-- Named entity count
-- Question type (what/who/how/why/compare/analyze)
-- Presence of comparison keywords
-- Presence of multi-hop indicators ("relationship between", "how does X affect Y")
+- `[PHASED]`: Fine-tuned DeBERTa-v3-small classifier (2K labeled examples)
+- `[ACTIVE]`: LLM-based classification (few-shot prompt via gpt-4o-mini)
 """
 
 @observe(name="route_query")
 async def route_query(state: NexusState) -> str:
     query = state.query
 
-    # Try fine-tuned classifier first
-    try:
-        tier = query_classifier.predict(query)
-    except Exception:
-        # Fallback to LLM classification
-        tier = await llm_classify_query(query)
+    # Try LLM classification directly for cost/stability
+    tier = await llm_classify_query(query)
 
     state.query_tier = tier
 
@@ -1297,18 +1286,11 @@ async def validator_node(state: NexusState) -> dict:
     analyst_output = state.agent_messages[-1].content
     retrieved_chunks = state.retrieved_chunks
 
-    # NLI-based fact check
+    # gpt-4o-mini based fact check (Cost-Optimized Validation)
     claims = extract_claims(analyst_output)
-    hallucination_scores = []
-
-    for claim in claims:
-        best_support = max(
-            nli_model.predict([(claim.text, c["text"]) for c in retrieved_chunks]),
-            key=lambda x: x[2],  # entailment score
-        )
-        hallucination_scores.append(1 - best_support[2])
-
-    avg_hallucination = sum(hallucination_scores) / len(hallucination_scores)
+    validation_result = await llm_validate_claims(claims, retrieved_chunks)
+    
+    avg_hallucination = validation_result.hallucination_score
 
     if avg_hallucination > 0.3:  # >30% hallucination risk
         return {
@@ -2053,41 +2035,48 @@ eventSource.onmessage = (event) => {
 
 ## 13. Deployment & Infrastructure
 
-### Backend (Railway)
+Nexus uses **Terraform** to manage its AWS-based production environment, ensuring that the infrastructure is version-controlled and reproducible.
 
-```dockerfile
-# Dockerfile
-FROM python:3.12-slim
+### Infrastructure Provisioning (Terraform)
 
-WORKDIR /app
+The infrastructure is defined in the `terraform/` directory and consists of:
+- **Compute**: An EC2 instance (defaulting to `t3a.medium`) running Ubuntu 22.04 LTS.
+- **Networking**: A custom VPC with a public subnet, internet gateway, and a static Elastic IP (EIP).
+- **Security**: IAM roles for ECR access and SSM management, plus a dedicated security group allowing ports 80/443.
+- **Container Registry**: Amazon ECR repositories for the `nexus-backend` and `nexus-frontend` images.
 
-# Install system deps for unstructured, spaCy, etc.
-RUN apt-get update && apt-get install -y \
-    libmagic1 poppler-utils tesseract-ocr \
-    && rm -rf /var/lib/apt/lists/*
+#### Provisioning Steps
 
-COPY pyproject.toml poetry.lock ./
-RUN pip install poetry && poetry install --no-dev
+1. **Initialize Terraform**:
+   ```bash
+   cd terraform
+   terraform init
+   ```
 
-COPY backend/ ./backend/
-COPY evals/ ./evals/
+2. **Configure Variables**:
+   Update `terraform/variables.tf` or create a `terraform.tfvars` file to specify your `aws_region`, `ami_id`, and `instance_type`.
 
-# Download models at build time
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
-RUN python -m spacy download en_core_web_sm
+3. **Plan and Apply**:
+   ```bash
+   terraform plan
+   terraform apply
+   ```
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+4. **Retrieve Outputs**:
+   After completion, Terraform will output the `public_ip` and `ecr_repository_urls` needed for the CI/CD pipeline.
 
-Railway config: Connect GitHub repo → auto-deploy on push to `main` → serverless sleep on idle.
+### Containerization (Docker)
 
-### Frontend (Vercel)
+Both the backend and frontend are containerized and pushed to Amazon ECR. 
 
-- Connect GitHub repo
-- Framework: Next.js (auto-detected)
-- Environment variables: `NEXT_PUBLIC_API_URL=https://nexus-api.up.railway.app`
-- Auto-deploy on push
+**Backend Docker Highlights**:
+- Multi-stage builds for minimal image size.
+- Pre-downloads essential NLTK/spaCy models to ensure fast startup on EC2.
+- Environment-aware configuration via `.env` files.
+
+**Frontend Docker Highlights**:
+- Standalone Next.js build for production performance.
+- Reverse-proxied via Caddy on the host machine.
 
 ---
 
@@ -2138,16 +2127,18 @@ jobs:
 
 ## 15. Cost Breakdown
 
-| Service | Role | Tier | Monthly Cost |
+| Service | Role | Tier / Instance | Monthly Cost (Est.) |
 |---|---|---|---|
-| Railway | Backend + workers | Hobby ($5 credit) | $0 – $5 |
-| Vercel | Frontend | Free (100K invocations) | $0 |
-| Qdrant Cloud | Vector database | Free (1GB, 1M vectors) | $0 |
-| Supabase | PostgreSQL + auth | Free (500MB, 50K MAU) | $0 |
-| Upstash Redis | Cache + pub/sub | Free (10K cmds/day) | $0 |
-| Langfuse Cloud | Observability | Free (50K observations) | $0 |
-| OpenAI / Anthropic | LLM inference | Pay-per-token | $3 – $10 |
-| **Total** | | | **$3 – $15** |
+| AWS (EC2) | Backend + Frontend | `t3.small` (2 vCPU, 2GB RAM) | $12 – $15 |
+| AWS (EBS/EIP) | Block Storage + Static IP | 24GB GP3 + EIP | $2 – $4 |
+| Qdrant Cloud | Vector Database | Free Tier (1GB) | $0 |
+| Supabase | PostgreSQL + Metadata | Free Tier (500MB) | $0 |
+| Upstash Redis | Semantic Cache | Free Tier (10K/day) | $0 |
+| OpenAI | Self-RAG + Foundation | `gpt-4o-mini` (Tokens) | $2 – $5 |
+| **Total** | | | **$16 – $24** |
+
+> [!TIP]
+> The move to **LLM-as-a-Validator** (Self-RAG) reduced our fixed infrastructure requirements by 1.5GB RAM, allowing us to stay on the AWS `t3.small` tier instead of `t3.medium`.
 
 ---
 
