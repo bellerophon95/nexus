@@ -18,6 +18,7 @@ def upsert_document(
     fingerprint: int,
     chunk_count: int,
     description: str | None = None,
+    user_id: str | None = None,
     is_personal: bool = True,
 ) -> str:
     """
@@ -31,6 +32,7 @@ def upsert_document(
             "fingerprint": fingerprint,
             "chunk_count": chunk_count,
             "description": description,
+            "user_id": user_id,
             "is_personal": is_personal,
         }
 
@@ -52,7 +54,7 @@ def upsert_document(
 
 
 @observe()
-def insert_chunks(document_id: str, chunks_data: list[dict[str, Any]]):
+def insert_chunks(document_id: str, chunks_data: list[dict[str, Any]], user_id: str | None = None):
     """
     Inserts a list of processed chunks into the chunks table in Supabase.
     Each item in chunks_data should match the chunks table schema.
@@ -70,6 +72,7 @@ def insert_chunks(document_id: str, chunks_data: list[dict[str, Any]]):
                 "key_phrases": chunk["key_phrases"],
                 "sparse_tokens": chunk["sparse_tokens"],
                 "embedding": chunk["embedding"],
+                "user_id": user_id,
             }
             payload.append(item)
 
@@ -100,6 +103,7 @@ def insert_chunks(document_id: str, chunks_data: list[dict[str, Any]]):
                     "entities": chunk["entities"],
                     "topics": chunk["topics"],
                     "key_phrases": chunk["key_phrases"],
+                    "user_id": user_id,
                 },
             )
             qdrant_points.append(point)

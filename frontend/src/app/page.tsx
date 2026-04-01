@@ -22,6 +22,7 @@ import { CitationCard } from "@/components/CitationCard";
 import { MetricsPanel, ChatMetrics } from "@/components/MetricsPanel";
 import { KnowledgeHub } from "@/components/KnowledgeHub";
 import { SidebarHistory } from "@/components/SidebarHistory";
+import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -252,6 +253,7 @@ export default function Home() {
                   <span className="text-sm font-semibold text-slate-100">Nexus AI Intelligent Grounding Layer</span>
                </div>
                <div className="flex items-center gap-2">
+                  <NotificationDrawer />
                   <Button variant="ghost" size="sm" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-slate-400 hover:text-white">
                      <PanelRightClose className={cn("h-4 w-4 transition-transform", !isSidebarOpen && "rotate-180")} />
                   </Button>

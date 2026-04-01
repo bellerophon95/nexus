@@ -83,6 +83,10 @@ async def startup_event():
     # Warm up NLP models (Presidio, etc.) in background to avoid blocking health checks
     asyncio.create_task(warmup_guardrails())
 
+    # 2. Start Background Ingestion Worker
+    from backend.ingestion.worker import run_worker_loop
+    asyncio.create_task(run_worker_loop())
+
     logger.info(f"Nexus Backend started in {settings.ENV} mode (Asynchronous NLP Loading)")
 
 

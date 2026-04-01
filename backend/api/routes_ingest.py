@@ -7,106 +7,91 @@ import uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from backend.api.security import rate_limit_dependency
+from backend.api.security import get_user_id, rate_limit_dependency
 from backend.cache.semantic_cache import get_semantic_cache
 from backend.database.supabase import get_async_supabase, get_supabase
-from backend.ingestion.pipeline import run_ingestion_pipeline
-
-logger = logging.getLogger(__name__)
-router = APIRouter()
+from backend.ingestion.pipeline import prepare_ingestion, finalize_ingestion
 
 
-class TaskStatusResponse(BaseModel):
-    task_id: str = Field(..., alias="id")
-    status: str
-    progress: float
-    message: str
-    document_id: str | None = None
-    chunk_count: int | None = None
-
-    class Config:
-        populate_by_name = True
-
-
-class IngestResponse(BaseModel):
-    task_id: str
-    status: str
-    message: str
-
-
-def process_ingestion_task(task_id: str, file_path: str, filename: str, is_personal: bool = True):
+def process_ingestion_task(
+    task_id: str, file_path: str, filename: str, user_id: str, is_personal: bool = True
+):
     """
-    Background worker for document ingestion. Runs in a separate thread.
-    Uses synchronous Supabase client for thread safety and to match pipeline IO.
+    Producer: Splits the document into chunks and enqueues them in Supabase.
+    Runs in a background thread to avoid blocking the upload response.
     """
     try:
-        get_supabase().table("ingestion_tasks").update(
-            {"status": "processing", "progress": 2.0}
+        supabase = get_supabase()
+        supabase.table("ingestion_tasks").update(
+            {"status": "processing", "progress": 5.0, "message": "Analyzing document structure..."}
         ).eq("id", task_id).execute()
 
-        logger.info(f"Starting ingestion task {task_id} for {filename}")
+        logger.info(f"Producing ingestion tasks for {filename} (Task: {task_id})")
 
-        # Define progress callback
-        def update_progress(progress: float, message: str | None = None):
-            update_data = {"progress": progress}
-
-            if message:
-                update_data["message"] = message
-            else:
-                # Infer descriptive message from progress stage
-                if progress < 15:
-                    update_data["message"] = "Parsing document..."
-                elif progress < 20:
-                    update_data["message"] = "Cleaning content..."
-                elif progress < 40:
-                    update_data["message"] = "Semantic chunking..."
-                elif progress < 90:
-                    update_data["message"] = "Enriching and embedding..."
-                elif progress < 100:
-                    update_data["message"] = "Persisting to warehouse..."
-                else:
-                    update_data["message"] = "Complete."
-
-            get_supabase().table("ingestion_tasks").update(update_data).eq("id", task_id).execute()
-
-        # Run ingestion pipeline
-        result = run_ingestion_pipeline(
-            file_path, title=filename, is_personal=is_personal, progress_callback=update_progress
-        )
+        # 1. Prepare (Parse + Clean + Chunk)
+        result = prepare_ingestion(file_path, title=filename)
 
         if result["status"] == "error":
-            get_supabase().table("ingestion_tasks").update(
-                {"status": "error", "message": result.get("message", "Unknown pipeline error")}
+            supabase.table("ingestion_tasks").update(
+                {"status": "error", "message": result.get("message", "Parsing error")}
             ).eq("id", task_id).execute()
             return
 
         if result["status"] == "skipped":
-            get_supabase().table("ingestion_tasks").update(
+            supabase.table("ingestion_tasks").update(
                 {"status": "skipped", "message": "Document already exists."}
             ).eq("id", task_id).execute()
             return
 
-        if result["status"] == "success":
-            # Invalidate any cache entries for this document
-            get_semantic_cache().invalidate_for_documents([result["document_id"]])
-            get_supabase().table("ingestion_tasks").update(
+        chunks = result["chunks"]
+        total_chunks = len(chunks)
+
+        # 2. Queue Chunks in DB
+        chunk_records = []
+        for i, chunk in enumerate(chunks):
+            chunk_records.append(
                 {
-                    "status": "completed",
-                    "progress": 100.0,
-                    "document_id": result["document_id"],
-                    "chunk_count": result.get("chunk_count", 0),
-                    "message": f"Successfully ingested {filename}.",
+                    "task_id": task_id,
+                    "chunk_index": i,
+                    "content": chunk.text,
+                    "metadata": {
+                        "token_count": chunk.token_count,
+                        "fingerprint": str(result["fingerprint"]),
+                        "title": result["title"],
+                        "full_text": result["full_text"],  # Store for final summarization
+                        "file_path": file_path,
+                    },
+                    "status": "pending",
                 }
-            ).eq("id", task_id).execute()
+            )
+
+        # Bulk insert chunks (Supabase handles up to a few thousand rows easily)
+        # We do this in batches of 200 to be safe with payload sizes
+        BATCH_SIZE = 200
+        for i in range(0, len(chunk_records), BATCH_SIZE):
+            batch = chunk_records[i : i + BATCH_SIZE]
+            supabase.table("ingestion_chunks").insert(batch).execute()
+
+        # 3. Update Task Status
+        supabase.table("ingestion_tasks").update(
+            {
+                "status": "processing",
+                "progress": 10.0,
+                "chunk_count": total_chunks,
+                "message": f"Queued {total_chunks} chunks for background processing.",
+            }
+        ).eq("id", task_id).execute()
+
+        logger.info(f"Successfully enqueued {total_chunks} chunks for task {task_id}")
 
     except Exception as e:
-        logger.error(f"Ingestion task {task_id} failed: {e}")
+        logger.error(f"Producer failed for task {task_id}: {e}")
         try:
             get_supabase().table("ingestion_tasks").update(
-                {"status": "error", "message": str(e)}
+                {"status": "error", "message": f"Queueing failed: {str(e)}"}
             ).eq("id", task_id).execute()
-        except Exception as inner_e:
-            logger.error(f"Could not even update error status for task {task_id}: {inner_e}")
+        except Exception:
+            pass
 
 
 @router.post("/ingest", response_model=IngestResponse)
@@ -114,6 +99,7 @@ async def ingest_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     is_personal: bool = True,
+    user_id: str = Depends(get_user_id),
     _=Depends(rate_limit_dependency),
 ):
     """
@@ -159,13 +145,21 @@ async def ingest_file(
         # Initialize task status in DB (Async)
         await (
             async_supabase.table("ingestion_tasks")
-            .insert({"id": task_id, "status": "pending", "progress": 0, "filename": file.filename})
+            .insert(
+                {
+                    "id": task_id,
+                    "status": "pending",
+                    "progress": 0,
+                    "filename": file.filename,
+                    "user_id": user_id,
+                }
+            )
             .execute()
         )
 
         # Add to background tasks (Runs in separate thread since process_ingestion_task is 'def')
         background_tasks.add_task(
-            process_ingestion_task, task_id, file_path, file.filename, is_personal
+            process_ingestion_task, task_id, file_path, file.filename, user_id, is_personal
         )
 
         return IngestResponse(

@@ -41,8 +41,8 @@ export function SkillHub() {
       try {
         const response = await fetch("/api/skills/index");
         const data = await response.json();
-        setSkills(data.skills);
-        setBundles(data.bundles);
+        setSkills(data.skills || []);
+        setBundles(data.bundles || {});
       } catch (error) {
         console.error("Failed to fetch skills:", error);
       } finally {

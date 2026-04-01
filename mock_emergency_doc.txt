@@ -1,0 +1,3 @@
+Project Nexus Emergency Fallback Document.
+
+This is an emergency document injected directly into the Supabase and Qdrant backend instances to bypass the standard API ingestion pipeline. The standard pipeline running on the EC2 instance experienced Out-Of-Memory (OOM) lockups while processing large PDF files due to uncapped Docker memory limits. This document ensures that semantic routing, Redis caching, and RAG retrieval continue to operate against verified data while the infrastructure is rebooted. Key systems: LangGraph for orchestration, Qdrant for vector search, Supabase for relational data and RLS, and Upstash for semantic cache hits.

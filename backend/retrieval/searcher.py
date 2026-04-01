@@ -12,7 +12,11 @@ logger = logging.getLogger(__name__)
 
 @observe(name="Search Knowledge Base")
 def search_knowledge_base(
-    query: str, limit: int = 10, rerank: bool = True, match_threshold: float = 0.2
+    query: str,
+    user_id: str | None = None,
+    limit: int = 10,
+    rerank: bool = True,
+    match_threshold: float = 0.2,
 ) -> list[dict[str, Any]]:
     """
     Performs a hybrid search (Dense + Sparse) and optionally reranks results.
@@ -24,13 +28,27 @@ def search_knowledge_base(
             logger.error("Failed to generate query embedding.")
             return []
 
-        # 2. Call Qdrant for dense search
+        # 2. Call Qdrant for dense search with user_id filter
         match_count = limit * 3 if rerank else limit
 
         try:
+            filter_obj = None
+            if user_id:
+                filter_obj = models.Filter(
+                    should=[
+                        models.FieldCondition(
+                            key="user_id", match=models.MatchValue(value=user_id)
+                        ),
+                        models.IsNullCondition(
+                            is_null=models.PayloadField(key="user_id")
+                        )
+                    ]
+                )
+
             qdrant_response = get_qdrant().search(
                 collection_name="nexus_chunks",
                 query_vector=query_embedding,
+                query_filter=filter_obj,
                 limit=match_count,
                 with_payload=True,
             )
@@ -59,6 +77,7 @@ def search_knowledge_base(
                     {
                         "query_embedding": query_embedding,
                         "query_text": query,
+                        "query_user_id": user_id,
                         "match_threshold": match_threshold,
                         "match_count": match_count,
                     },
