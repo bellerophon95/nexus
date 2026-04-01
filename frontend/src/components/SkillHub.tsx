@@ -17,14 +17,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { API_BASE_URL } from "@/lib/constants";
 
 interface Skill {
   id: string;
-  metadata: {
-    name: string;
-    description: string;
-    category?: string;
-  };
+  name: string;
+  description: string;
+  role?: string;
+  expertise?: string[];
+  category?: string;
   path: string;
 }
 
@@ -39,7 +40,7 @@ export function SkillHub() {
   useEffect(() => {
     const fetchSkills = async () => {
       try {
-        const response = await fetch("/api/skills/index");
+        const response = await fetch(`${API_BASE_URL}/api/skills/index`);
         const data = await response.json();
         setSkills(data.skills || []);
         setBundles(data.bundles || {});
@@ -70,7 +71,7 @@ export function SkillHub() {
   };
 
   const filteredSkills = skills.filter(skill => 
-    skill.metadata?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    skill.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     skill.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -161,10 +162,10 @@ export function SkillHub() {
 
                 <div className="mt-3">
                   <h3 className="font-bold text-sm text-slate-200 group-hover:text-white transition-colors uppercase tracking-tight">
-                    {skill.metadata?.name || skill.id}
+                    {skill.name || skill.id}
                   </h3>
                   <p className="mt-1 text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                    {skill.metadata?.description || "No description provided."}
+                    {skill.description || "No description provided."}
                   </p>
                 </div>
 
