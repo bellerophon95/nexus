@@ -124,7 +124,7 @@ jobs:
               \"echo $ENV_B64 | base64 -d > .env\",
               \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
               \"docker-compose -f docker-compose.prod.yml pull\",
-              \"docker-compose -f docker-compose.prod.yml up -d\",
+              \"docker-compose -f docker-compose.prod.yml up -d --force-recreate\",
               \"docker system prune -af\",
               \"docker volume prune -f\"
             ]" \
