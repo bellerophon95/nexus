@@ -157,18 +157,21 @@ async def query_streaming(
             # Fetch context chunks from Knowledge Base (Vector + BM25)
             try:
                 # Use a small loop to allow heartbeats if search is slow (rare but possible)
-                search_task = asyncio.create_task(asyncio.to_thread(
-                    search_knowledge_base,
-                    effective_q,
-                    match_threshold=match_threshold,
-                    rerank=rerank,
-                ))
-                
+                search_task = asyncio.create_task(
+                    asyncio.to_thread(
+                        search_knowledge_base,
+                        effective_q,
+                        match_threshold=match_threshold,
+                        rerank=rerank,
+                    )
+                )
+
                 while not search_task.done():
                     hb = await heartbeat()
-                    if hb: yield hb
+                    if hb:
+                        yield hb
                     await asyncio.sleep(0.5)
-                
+
                 context_chunks = await search_task
             except Exception as e:
                 logger.error(f"Retriever search failed: {e}")
@@ -252,18 +255,21 @@ async def query_streaming(
             # If evaluation takes too long, we'll continue with partial data
             try:
                 # Give it up to 4 seconds for GPT-4o-mini to respond
-                eval_task = asyncio.create_task(asyncio.gather(
-                    asyncio.wait_for(judge_task, timeout=4.0),
-                    asyncio.wait_for(output_guard_task, timeout=4.0),
-                ))
-                
+                eval_task = asyncio.create_task(
+                    asyncio.gather(
+                        asyncio.wait_for(judge_task, timeout=4.0),
+                        asyncio.wait_for(output_guard_task, timeout=4.0),
+                    )
+                )
+
                 while not eval_task.done():
                     hb = await heartbeat()
-                    if hb: yield hb
+                    if hb:
+                        yield hb
                     await asyncio.sleep(0.5)
-                
+
                 judge_results, output_guard = await eval_task
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Post-stream evaluation timed out, continuing with partial results")
                 judge_results = {}
                 output_guard = None  # Will fall back to raw answer
