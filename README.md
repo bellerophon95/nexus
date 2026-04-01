@@ -35,14 +35,14 @@ graph TD
 - **Backend**: Python 3.12 / FastAPI (Containerized on Amazon ECR)
 - **Frontend**: Next.js 15 (Containerized on Amazon ECR)
 - **CI/CD**: GitHub Actions (Automated Lint, Test, Build, and AWS SSM Deployment)
-- **Databases**: Supabase `[ACTIVE]`, Qdrant (Vector) `[PHASED]`, Upstash (Redis Cache) `[ACTIVE]`
+- **Databases**: Supabase `[ACTIVE]`, Qdrant (Vector) `[ACTIVE]`, Upstash (Redis Cache) `[ACTIVE]`
 - **Observability**: Langfuse (Tracing, Cost, and RAGAS Evaluations)
 
 ---
 
 ## 🧬 Key Technical Features
 
-### 1. Multi-Agent Orchestration (LangGraph) `[PHASED]`
+### 1. Multi-Agent Orchestration (LangGraph) `[ACTIVE]`
 Uses a directed cyclic graph to manage stateful, multi-turn agent interactions. The system dynamically transitions between `Researcher`, `Analyst`, and `Validator` nodes to ensure grounded responses.
 
 ### 2. Hybrid Retrieval & Reranking `[ACTIVE]`
@@ -50,7 +50,7 @@ Uses a directed cyclic graph to manage stateful, multi-turn agent interactions. 
 - **Sparse Retrieval**: BM25/Supabase RPC for keyword matching.
 - **Cross-Encoder Reranker**: `cross-encoder/ms-marco-MiniLM-L-6-v2` re-scores candidates to minimize irrelevant context insertion.
 
-### 3. LLM-Powered Self-RAG (Hallucination Gate) `[PHASED]`
+### 3. LLM-Powered Self-RAG (Hallucination Gate) `[ACTIVE]`
 A specialized validation layer that uses `gpt-4o-mini` to check generated claims against retrieved context, preventing "hallucinated" answers from reaching the end-user.
 
 ---

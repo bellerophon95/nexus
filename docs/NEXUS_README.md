@@ -43,14 +43,14 @@ NEXUS is a domain-agnostic research intelligence platform that:
 
 | Technique | Implementation | Status |
 |---|---|---|
-| Multi-Agent Orchestration | LangGraph StateGraph with Supervisor/Worker pattern | `[PHASED]` |
+| Multi-Agent Orchestration | LangGraph StateGraph with Supervisor/Worker pattern | `[ACTIVE]` |
 | Adaptive RAG | Query complexity classifier routing to 3 tiers | `[ACTIVE]` |
-| Hybrid Search | Dense (MiniLM) + Sparse (Supabase RPC) + Qdrant | `[PHASED]` |
+| Hybrid Search | Dense (MiniLM) + Sparse (Supabase RPC) + Qdrant | `[ACTIVE]` |
 | Cross-Encoder Reranking | `ms-marco-MiniLM-L-6-v2` reranker on fused results | `[ACTIVE]` |
-| Self-RAG Validation | LLM-based (gpt-4o-mini) hallucination gate | `[PHASED]` |
+| Self-RAG Validation | LLM-based (gpt-4o-mini) hallucination gate | `[ACTIVE]` |
 | Semantic Chunking | Cosine-breakpoint splitting with parent-child hierarchy | `[ACTIVE]` |
 | Guardrails (Input) | PII anonymization, BetterProfanity, topic restriction | `[ACTIVE]` |
-| Guardrails (Output) | LLM-as-Judge hallucination scoring, toxicity filter | `[PHASED]` |
+| Guardrails (Output) | LLM-as-Judge hallucination scoring, toxicity filter | `[ACTIVE]` |
 | Evaluation Pipeline | RAGAS metrics + Langfuse observability | `[ACTIVE]` |
 | Semantic Caching | Cosine-similarity cache in Upstash Redis | `[ACTIVE]` |
 | Streaming | Server-Sent Events (SSE) token-by-token streaming | `[ACTIVE]` |
