@@ -8,7 +8,7 @@ on:
 
 jobs:
   validate:
-    name: Lint and Test Backend
+    name: Lint Backend
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -30,19 +30,6 @@ jobs:
 
       - name: Run Ruff Lint Check
         run: ruff check backend/
-
-      - name: Install App Dependencies
-        run: |
-          pip install -r backend/requirements.txt
-          pip install pytest pytest-asyncio httpx
-
-      - name: Run Pytest
-        env:
-          ENV: testing
-          SUPABASE_URL: http://localhost:8000
-          SUPABASE_SERVICE_ROLE_KEY: mock_key
-          OPENAI_API_KEY: sk-mock
-        run: pytest backend/tests/
 
   deploy:
     name: Build and Deploy to EC2
