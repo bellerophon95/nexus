@@ -22,7 +22,7 @@ else:
 
 class Settings(BaseSettings):
     # App Settings
-    APP_NAME: str = "Project Nexus"
+    APP_NAME: str = "Nexus AI"
     ENV: str = "development"
     DEBUG: bool = True
 

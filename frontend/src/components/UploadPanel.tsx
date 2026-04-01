@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, File, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, File, X, CheckCircle2, AlertCircle, Loader2, Lock, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -16,6 +16,7 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
   const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState("");
+  const [isPersonal, setIsPersonal] = useState(true);
 
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
     if (fileRejections.length > 0) {
@@ -111,6 +112,7 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
     
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("is_personal", String(isPersonal));
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/ingest`, {
@@ -189,6 +191,42 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
               <p className="text-[10px] text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
             </div>
           </div>
+
+          {status === "idle" && (
+            <div className="flex items-center justify-between rounded-lg bg-slate-800/30 p-3 border border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+                  isPersonal ? "bg-amber-500/10 text-amber-500" : "bg-emerald-500/10 text-emerald-500"
+                )}>
+                  {isPersonal ? <Lock className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-200">
+                    {isPersonal ? "Personal Knowledge" : "Shared Library"}
+                  </p>
+                  <p className="text-[9px] text-slate-500 leading-tight">
+                    {isPersonal ? "Only you can see this" : "Available to all recruiters"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPersonal(!isPersonal)}
+                className={cn(
+                  "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                  isPersonal ? "bg-slate-700" : "bg-emerald-600"
+                )}
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                    isPersonal ? "translate-x-0" : "translate-x-4"
+                  )}
+                />
+              </button>
+            </div>
+          )}
 
           {status === "uploading" && (
             <div className="space-y-2">

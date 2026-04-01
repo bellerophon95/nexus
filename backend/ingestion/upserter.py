@@ -12,7 +12,13 @@ logger = logging.getLogger(__name__)
 
 @observe()
 def upsert_document(
-    title: str, source_path: str, doc_type: str, fingerprint: int, chunk_count: int
+    title: str,
+    source_path: str,
+    doc_type: str,
+    fingerprint: int,
+    chunk_count: int,
+    description: str | None = None,
+    is_personal: bool = True,
 ) -> str:
     """
     Upserts document metadata into Supabase and returns the document UUID.
@@ -24,6 +30,8 @@ def upsert_document(
             "doc_type": doc_type,
             "fingerprint": fingerprint,
             "chunk_count": chunk_count,
+            "description": description,
+            "is_personal": is_personal,
         }
 
         # Upsert based on fingerprint uniqueness

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 def run_ingestion_pipeline(
     file_path: str,
     title: str | None = None,
+    is_personal: bool = True,
     progress_callback: Callable[[float], None] | None = None,
 ) -> dict[str, Any]:
     """
@@ -122,7 +123,15 @@ def run_ingestion_pipeline(
 
             logger.info(f"Batched {min(i + BATCH_SIZE, total_chunks)}/{total_chunks} chunks...")
 
-        # 5. Persist to Database (Supabase)
+        # 5. Generate Automated Description
+        if progress_callback:
+            progress_callback(92.0)
+        logger.info("Pipeline stage: Generating document description...")
+        from backend.ingestion.summarizer import generate_summary
+
+        description = generate_summary(cleaned_doc.text)
+
+        # 6. Persist to Database (Supabase)
         if progress_callback:
             progress_callback(95.0)
         logger.info("Pipeline stage: Persisting to Supabase...")
@@ -135,6 +144,8 @@ def run_ingestion_pipeline(
             doc_type=doc_type,
             fingerprint=cleaned_doc.fingerprint,
             chunk_count=len(processed_chunks),
+            description=description,
+            is_personal=is_personal,
         )
 
         insert_chunks(doc_id, processed_chunks)

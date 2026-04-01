@@ -57,7 +57,7 @@ A specialized validation layer that uses `gpt-4o-mini` to check generated claims
 
 ## 🏗️ Architectural Rationale: Cost-Optimized Validation
 
-A core design decision in Project Nexus was the pivot from **Local NLI** to **LLM-based Validation** for the Self-RAG layer.
+A core design decision in Nexus AI was the pivot from **Local NLI** to **LLM-based Validation** for the Self-RAG layer.
 
 ### The Problem: The "RAM Tax"
 Our initial blueprint called for `cross-encoder/nli-deberta-v3-small` running locally. However:

@@ -15,6 +15,7 @@ from backend.guardrails.input_guard import run_input_guardrails
 from backend.guardrails.output_guard import run_output_guardrails
 from backend.retrieval.generator import generate_answer_stream, generate_title
 from backend.retrieval.searcher import search_knowledge_base
+from backend.api.routes_skills import get_orchestrator
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -193,15 +194,20 @@ async def query_streaming(
                 )
                 tier = "general"
 
-            yield await yield_agent_step("LLM", "Synthesizing Answer", "running")
-            yield f"data: {json.dumps({'type': 'activity', 'node': 'analyst', 'status': 'Synthesizing grounded response...', 'status_type': 'running'})}\n\n"
-
             yield await yield_agent_step("Retriever", "Scanning Knowledge Base", "completed")
             yield f"data: {json.dumps({'type': 'activity', 'node': 'retriever', 'status': 'Search completed.', 'status_type': 'completed'})}\n\n"
 
+            # Step 1.5: Skill Orchestration (Fetch relevant skills)
+            yield await yield_agent_step("Nexus", "Orchestrating Skills", "running")
+            orchestrator = get_orchestrator()
+            skill_prompt = await orchestrator.get_orchestration_prompt(effective_q)
+            yield await yield_agent_step("Nexus", "Orchestrating Skills", "completed")
+
             # Step 2: Stream Answer Generation
             full_answer = ""
-            async for token in generate_answer_stream(effective_q, context_chunks, history=history):
+            async for token in generate_answer_stream(
+                effective_q, context_chunks, history=history, skill_prompt=skill_prompt
+            ):
                 # Check for client disconnect
                 if await request.is_disconnected():
                     logger.info("Client disconnected during stream")

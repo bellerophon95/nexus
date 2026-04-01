@@ -15,7 +15,10 @@ client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 @observe(name="Generate RAG Answer")
 async def generate_answer(
-    query: str, context_chunks: list[dict[str, Any]], history: list[dict[str, Any]] | None = None
+    query: str, 
+    context_chunks: list[dict[str, Any]], 
+    history: list[dict[str, Any]] | None = None,
+    skill_prompt: str = ""
 ) -> str:
     """
     Generates a natural language answer based on the provided query, context, and history.
@@ -31,15 +34,18 @@ async def generate_answer(
         context_text += f"\n--- Source: {title} (Chunk {i + 1}) ---\n{chunk['text']}\n"
 
     system_prompt = (
-        "You are Project Nexus, an advanced AI research assistant. "
+        "You are Nexus AI, an advanced intelligent grounding layer and research assistant. "
         "Your primary goal is to answer the user's question accurately. "
         "If context information is provided below, prioritize it and cite sources specifically. "
         "If a question is conversational (e.g., greetings, 'Who are you?', 'What can you do?'), "
-        "answer naturally based on your persona as Project Nexus. "
+        "answer naturally based on your persona as Nexus AI. "
         "If you are answering factual questions without context, explicitly state that you "
         "are using your general knowledge because no specific documents were found. "
         "Be professional, precise, and helpful. Use clear Markdown formatting."
     )
+    
+    if skill_prompt:
+        system_prompt += f"\n\n{skill_prompt}"
 
     # Build message list with history
     messages = [{"role": "system", "content": system_prompt}]
@@ -87,7 +93,10 @@ async def generate_answer(
 
 @observe(name="Generate RAG Answer Stream")
 async def generate_answer_stream(
-    query: str, context_chunks: list[dict[str, Any]], history: list[dict[str, Any]] | None = None
+    query: str, 
+    context_chunks: list[dict[str, Any]], 
+    history: list[dict[str, Any]] | None = None,
+    skill_prompt: str = ""
 ):
     """
     Generates a natural language answer using streaming with multi-turn history support.
@@ -104,15 +113,18 @@ async def generate_answer_stream(
         context_text += f"\n--- Source: {title} (Chunk {i + 1}) ---\n{chunk['text']}\n"
 
     system_prompt = (
-        "You are Project Nexus, an advanced AI research assistant. "
+        "You are Nexus AI, an advanced intelligent grounding layer and research assistant. "
         "Your primary goal is to answer the user's question accurately. "
         "If context information is provided below, prioritize it and cite sources specifically. "
         "If a question is conversational (e.g., greetings, 'Who are you?', 'What can you do?'), "
-        "answer naturally based on your persona as Project Nexus. "
+        "answer naturally based on your persona as Nexus AI. "
         "If you are answering factual questions without context, explicitly state that you "
         "are using your general knowledge because no specific documents were found. "
         "Be professional, precise, and helpful. Use clear Markdown formatting."
     )
+
+    if skill_prompt:
+        system_prompt += f"\n\n{skill_prompt}"
 
     # Build message list with history
     messages = [{"role": "system", "content": system_prompt}]

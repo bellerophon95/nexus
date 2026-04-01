@@ -6,12 +6,15 @@ import {
   Library,
   Layers,
   Search,
-  Upload
+  Upload,
+  Zap
 } from "lucide-react";
 import { DocumentLibrary } from "@/components/DocumentLibrary";
 import { UploadPanel } from "@/components/UploadPanel";
+import { SkillHub } from "@/components/SkillHub";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +28,7 @@ export function KnowledgeHub() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"documents" | "skills">("documents");
 
   const handleUploadSuccess = () => {
     // Increment trigger to refresh DocumentLibrary
@@ -44,12 +48,25 @@ export function KnowledgeHub() {
             <Library className="h-6 w-6 text-blue-400" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white italic tracking-tight uppercase">Knowledge Base</h1>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Intelligence Grounding Layer</p>
+            <h1 className="text-xl font-black text-white italic tracking-tight uppercase">Intelligence Hub</h1>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Capability & Grounding Layer</p>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
+          {/* Tab Selector */}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-[300px]">
+             <TabsList className="grid w-full grid-cols-2 bg-slate-800/40 border border-slate-700/50 p-1 h-10 rounded-xl">
+               <TabsTrigger value="documents" className="rounded-lg text-[10px] uppercase font-bold tracking-widest data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all">
+                 <Library className="h-3 w-3 mr-2" />
+                 Documents
+               </TabsTrigger>
+               <TabsTrigger value="skills" className="rounded-lg text-[10px] uppercase font-bold tracking-widest data-[state=active]:bg-amber-600 data-[state=active]:text-white transition-all">
+                 <Zap className="h-3 w-3 mr-2" />
+                 Skills
+               </TabsTrigger>
+             </TabsList>
+          </Tabs>
           {/* Search Bar */}
           <div className="relative hidden md:block">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -90,11 +107,15 @@ export function KnowledgeHub() {
 
       {/* Library Section */}
       <div className="flex-1 overflow-y-auto no-scrollbar">
-        <DocumentLibrary 
-          refreshTrigger={refreshTrigger} 
-          searchQuery={searchQuery}
-          showTitle={false} 
-        />
+        {activeTab === "documents" ? (
+          <DocumentLibrary 
+            refreshTrigger={refreshTrigger} 
+            searchQuery={searchQuery}
+            showTitle={false} 
+          />
+        ) : (
+          <SkillHub />
+        )}
       </div>
     </div>
   );

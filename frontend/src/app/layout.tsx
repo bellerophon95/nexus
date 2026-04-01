@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Project Nexus | Multi-Agent RAG Lab",
+  title: "Nexus AI | Intelligent Grounding Layer",
   description: "Advanced semantic search and agentic reasoning dashboard",
 };
 

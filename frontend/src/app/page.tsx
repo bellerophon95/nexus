@@ -249,7 +249,7 @@ export default function Home() {
                      <div className="h-6 w-6 rounded-full border-2 border-slate-950 bg-emerald-500"></div>
                      <div className="h-6 w-6 rounded-full border-2 border-slate-950 bg-rose-500"></div>
                   </div>
-                  <span className="text-sm font-semibold text-slate-100">Project Nexus Multi-Agent Lab</span>
+                  <span className="text-sm font-semibold text-slate-100">Nexus AI Intelligent Grounding Layer</span>
                </div>
                <div className="flex items-center gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-slate-400 hover:text-white">

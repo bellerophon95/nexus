@@ -34,7 +34,7 @@ class IngestResponse(BaseModel):
     message: str
 
 
-def process_ingestion_task(task_id: str, file_path: str, filename: str):
+def process_ingestion_task(task_id: str, file_path: str, filename: str, is_personal: bool = True):
     """
     Background worker for document ingestion. Runs in a separate thread.
     Uses synchronous Supabase client for thread safety and to match pipeline IO.
@@ -71,7 +71,7 @@ def process_ingestion_task(task_id: str, file_path: str, filename: str):
 
         # Run ingestion pipeline
         result = run_ingestion_pipeline(
-            file_path, title=filename, progress_callback=update_progress
+            file_path, title=filename, is_personal=is_personal, progress_callback=update_progress
         )
 
         if result["status"] == "error":
@@ -113,6 +113,7 @@ def process_ingestion_task(task_id: str, file_path: str, filename: str):
 async def ingest_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    is_personal: bool = True,
     _=Depends(rate_limit_dependency),
 ):
     """
@@ -163,7 +164,7 @@ async def ingest_file(
         )
 
         # Add to background tasks (Runs in separate thread since process_ingestion_task is 'def')
-        background_tasks.add_task(process_ingestion_task, task_id, file_path, file.filename)
+        background_tasks.add_task(process_ingestion_task, task_id, file_path, file.filename, is_personal)
 
         return IngestResponse(
             task_id=task_id,

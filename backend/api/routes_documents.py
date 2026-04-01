@@ -54,3 +54,30 @@ def delete_document(document_id: str):
     except Exception as e:
         logger.error(f"Failed to delete document {document_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{document_id}/share")
+@observe(name="Share Document")
+def share_document(document_id: str):
+    """
+    Marks a personal document as shared (is_personal = false).
+    This action is irreversible.
+    """
+    try:
+        response = (
+            get_supabase()
+            .table("documents")
+            .update({"is_personal": False})
+            .eq("id", document_id)
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        logger.info(f"Successfully shared document: {document_id}")
+        return {"status": "success", "message": f"Document {document_id} is now shared."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to share document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

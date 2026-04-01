@@ -10,9 +10,25 @@ import {
   FileCode, 
   FilePieChart,
   Search,
-  ExternalLink
+  ExternalLink,
+  Globe,
+  Lock,
+  MessageSquareText,
+  ShieldCheck,
+  AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/constants";
@@ -23,6 +39,8 @@ interface Document {
   doc_type: string;
   chunk_count: number;
   created_at: string;
+  is_personal: boolean;
+  description: string | null;
 }
 
 interface DocumentLibraryProps {
@@ -35,6 +53,8 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [sharingId, setSharingId] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchDocuments = async () => {
@@ -63,13 +83,37 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
         throw new Error(errorData.detail || "Failed to delete document");
       }
       
-      // Update local state
       setDocuments(prev => prev.filter(doc => doc.id !== id));
     } catch (err: any) {
       console.error("Delete error:", err);
       alert(`Error deleting document: ${err.message}`);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const shareDocument = async (id: string) => {
+    setIsSharing(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/documents/${id}/share`, {
+        method: "POST",
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to share document");
+      }
+      
+      // Update local state to reflect sharing
+      setDocuments(prev => prev.map(doc => 
+        doc.id === id ? { ...doc, is_personal: false } : doc
+      ));
+      setSharingId(null);
+    } catch (err: any) {
+      console.error("Share error:", err);
+      alert(`Error sharing document: ${err.message}`);
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -121,7 +165,8 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
       {(() => {
         const filteredDocs = documents.filter(doc => 
           doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          doc.doc_type.toLowerCase().includes(searchQuery.toLowerCase())
+          doc.doc_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (doc.description || "").toLowerCase().includes(searchQuery.toLowerCase())
         );
 
         if (filteredDocs.length === 0) {
@@ -148,6 +193,7 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
               <thead className="bg-slate-800/50 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                 <tr>
                   <th className="px-6 py-4">Document</th>
+                  <th className="px-6 py-4">Summary</th>
                   <th className="px-6 py-4">Chunks</th>
                   <th className="px-6 py-4">Ingested At</th>
                   <th className="px-6 py-4 text-right">Actions</th>
@@ -162,13 +208,34 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
                         {getDocIcon(doc.doc_type)}
                       </div>
                       <div>
-                        <p className="font-semibold text-slate-200 text-sm group-hover:text-blue-400 transition-colors">
-                          {doc.title}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-200 text-sm group-hover:text-blue-400 transition-colors truncate max-w-[200px]">
+                            {doc.title}
+                          </p>
+                          {doc.is_personal ? (
+                            <span className="flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-500 border border-amber-500/20">
+                              <Lock className="h-2.5 w-2.5" />
+                              PERSONAL
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-500 border border-emerald-500/20">
+                              <ShieldCheck className="h-2.5 w-2.5" />
+                              SHARED
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-slate-500 uppercase tracking-tight font-bold opacity-60">
                           {doc.doc_type}
                         </p>
                       </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 max-w-[300px]">
+                    <div className="flex items-start gap-2">
+                      <MessageSquareText className="h-3 w-3 text-slate-600 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-slate-400 leading-normal line-clamp-2 italic">
+                        {doc.description || "Synthesizing description..."}
+                      </p>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -186,6 +253,48 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
+                      {doc.is_personal && (
+                        <AlertDialog open={sharingId === doc.id} onOpenChange={(open: boolean) => !open && setSharingId(null)}>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setSharingId(doc.id)}
+                              className="h-8 w-8 rounded-full text-slate-500 hover:text-emerald-400 hover:bg-emerald-400/10"
+                              title="Share to Library"
+                            >
+                              <Globe className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="bg-slate-900 border-slate-800">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="text-slate-100 flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                Share Document?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription className="text-slate-400">
+                                This will make <span className="font-bold text-slate-200">"{doc.title}"</span> available to all users in the Shared Library. 
+                                <br /><br />
+                                <span className="text-amber-500/80 text-xs font-medium">
+                                  This action is irreversible and will allow others to query this data.
+                                </span>
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700">Cancel</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => shareDocument(doc.id)}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                                disabled={isSharing}
+                              >
+                                {isSharing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                                Share Irreversibly
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                      
                       <Button
                         variant="ghost"
                         size="icon"

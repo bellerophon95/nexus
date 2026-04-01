@@ -398,7 +398,7 @@ export function ChatInterface({
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600/10 border border-blue-500/30 text-blue-500 mb-4 animate-pulse">
                 <Sparkles className="h-6 w-6" />
               </div>
-              <h2 className="text-xl font-bold text-slate-200">Welcome to Project Nexus</h2>
+              <h2 className="text-xl font-bold text-slate-200">Welcome to Nexus AI</h2>
               <p className="mt-2 text-sm text-slate-500 max-w-xs">
                 Ask anything about your research documents. I'll search across the knowledge base and synthesize an answer.
               </p>

@@ -16,6 +16,7 @@ from backend.api import (
     routes_ingest,
     routes_query,
     routes_search,
+    routes_skills,
     routes_tasks,
 )
 from backend.config import settings
@@ -54,6 +55,7 @@ app.include_router(routes_query.router, prefix="/api", tags=["Streaming"])
 app.include_router(routes_documents.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(routes_history.router, prefix="/api", tags=["History"])
 app.include_router(routes_tasks.router, prefix="/api", tags=["Tasks"])
+app.include_router(routes_skills.router, prefix="/api", tags=["Skills"])
 
 
 @app.on_event("startup")
