@@ -26,19 +26,19 @@ def search_knowledge_base(
     # Defensive check to convert empty strings to None (prevents query shadowing)
     if user_id and not user_id.strip():
         user_id = None
-    
+
     try:
         # 1. Generate embedding for the query
         query_embedding = generate_dense_embedding(query)
         if not query_embedding:
             logger.error("Failed to generate query embedding.")
             return []
-            
+
         match_count = limit * 3 if rerank else limit
 
         client = get_qdrant()
         initial_results = []
-        
+
         # 2. Call Qdrant for dense search if available
         if client:
             try:
@@ -91,7 +91,7 @@ def search_knowledge_base(
                             "score": hit.score,
                             "document_id": payload.get("document_id"),
                             "metadata": payload,
-                            "title": payload.get("title", "Unknown"), 
+                            "title": payload.get("title", "Unknown"),
                         }
                     )
                 logger.info(f"Retrieved {len(initial_results)} results from Qdrant dense search.")
@@ -121,7 +121,9 @@ def search_knowledge_base(
                         metadata = row.get("metadata", {})
                         row["title"] = metadata.get("title", "Unknown")
                         initial_results.append(row)
-                logger.info(f"Retrieved {len(initial_results)} results from Supabase hybrid search (user_id: {user_id}).")
+                logger.info(
+                    f"Retrieved {len(initial_results)} results from Supabase hybrid search (user_id: {user_id})."
+                )
             except Exception as se:
                 logger.error(f"Supabase RPC search failed: {se}")
 
@@ -142,7 +144,9 @@ def search_knowledge_base(
                         row["score"] = 0.5  # Artificial score for fallback
                         row["title"] = row.get("metadata", {}).get("title", "Unknown")
                         initial_results.append(row)
-                logger.info(f"Retrieved {len(initial_results)} results from Broad Shared Search fallback.")
+                logger.info(
+                    f"Retrieved {len(initial_results)} results from Broad Shared Search fallback."
+                )
             except Exception as be:
                 logger.error(f"Broad search fallback failed: {be}")
 

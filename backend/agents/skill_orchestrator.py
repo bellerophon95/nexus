@@ -37,10 +37,12 @@ class SkillOrchestrator:
                     # Merge by ID, database takes precedence for matching IDs
                     remote_skills = {s["id"]: s for s in response.data}
                     local_skills = {s["id"]: s for s in self.skills_index}
-                    
+
                     merged = {**local_skills, **remote_skills}
                     self.skills_index = list(merged.values())
-                    logger.info(f"Loaded {len(self.skills_index)} expert skills ({local_count} local, {len(remote_skills)} remote).")
+                    logger.info(
+                        f"Loaded {len(self.skills_index)} expert skills ({local_count} local, {len(remote_skills)} remote)."
+                    )
                 else:
                     logger.warning("Supabase skill registry empty. Using only local definitions.")
 

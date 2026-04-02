@@ -33,11 +33,15 @@ def get_qdrant() -> QdrantClient:
             logger.error(f"Qdrant Cloud connection failed with credentials: {e}")
             # Do NOT fallback to :memory: silently if we were supposed to use cloud
             if settings.QDRANT_URL and settings.QDRANT_API_KEY:
-                logger.critical("Qdrant Cloud credentials provided but connection failed. Not falling back to in-memory to avoid data loss/shadowing.")
+                logger.critical(
+                    "Qdrant Cloud credentials provided but connection failed. Not falling back to in-memory to avoid data loss/shadowing."
+                )
                 return None
 
         # Fallback to in-memory ONLY if no cloud config exists
-        logger.info("No Qdrant Cloud config found. Initializing in-memory Qdrant client for local testing.")
+        logger.info(
+            "No Qdrant Cloud config found. Initializing in-memory Qdrant client for local testing."
+        )
         _qdrant_client = QdrantClient(":memory:")
 
     return _qdrant_client

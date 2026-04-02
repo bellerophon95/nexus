@@ -57,7 +57,9 @@ def process_ingestion_task(
         total_chunks = len(chunks)
 
         # Initialize chunk_count immediately to avoid division-by-zero in worker
-        supabase.table("ingestion_tasks").update({"chunk_count": total_chunks}).eq("id", task_id).execute()
+        supabase.table("ingestion_tasks").update({"chunk_count": total_chunks}).eq(
+            "id", task_id
+        ).execute()
 
         # 2. Queue Chunks in DB
         chunk_records = []
@@ -82,7 +84,7 @@ def process_ingestion_task(
         BATCH_SIZE = 500
         for i in range(0, len(chunk_records), BATCH_SIZE):
             batch = chunk_records[i : i + BATCH_SIZE]
-            
+
             # Simple retry loop (max 3 attempts)
             for attempt in range(1, 4):
                 try:
@@ -91,7 +93,9 @@ def process_ingestion_task(
                 except Exception as e:
                     if attempt == 3:
                         raise e
-                    logger.warning(f"Batch insert attempt {attempt} failed for task {task_id}: {e}. Retrying...")
+                    logger.warning(
+                        f"Batch insert attempt {attempt} failed for task {task_id}: {e}. Retrying..."
+                    )
                     time.sleep(1)
 
         # 3. Update Task Status & Storage Meta

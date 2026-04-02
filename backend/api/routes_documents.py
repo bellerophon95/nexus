@@ -67,11 +67,10 @@ def share_document(document_id: str):
     """
     try:
         supabase = get_supabase()
-        
+
         # 1. Update the document record
         response = (
-            supabase
-            .table("documents")
+            supabase.table("documents")
             .update({"is_personal": False})
             .eq("id", document_id)
             .execute()
@@ -82,8 +81,7 @@ def share_document(document_id: str):
 
         # 2. Propagate to chunks in Supabase (Set user_id to NULL)
         (
-            supabase
-            .table("chunks")
+            supabase.table("chunks")
             .update({"user_id": None})
             .eq("document_id", document_id)
             .execute()
@@ -94,27 +92,26 @@ def share_document(document_id: str):
             qdrant = get_qdrant()
             qdrant.set_payload(
                 collection_name="nexus_chunks",
-                payload={
-                    "user_id": None,
-                    "is_personal": False
-                },
+                payload={"user_id": None, "is_personal": False},
                 points=models.Filter(
                     must=[
                         models.FieldCondition(
-                            key="document_id",
-                            match=models.MatchValue(value=document_id)
+                            key="document_id", match=models.MatchValue(value=document_id)
                         )
                     ]
-                )
+                ),
             )
             logger.info(f"Successfully updated Qdrant payloads for document: {document_id}")
         except Exception as qe:
             logger.error(f"Failed to update Qdrant payloads for document {document_id}: {qe}")
-            # We don't raise here to avoid failing the whole request if only Qdrant sync fails, 
+            # We don't raise here to avoid failing the whole request if only Qdrant sync fails,
             # but ideally we want consistency.
 
         logger.info(f"Successfully shared document {document_id} and its associated chunks.")
-        return {"status": "success", "message": f"Document {document_id} and its chunks are now shared globally."}
+        return {
+            "status": "success",
+            "message": f"Document {document_id} and its chunks are now shared globally.",
+        }
     except HTTPException:
         raise
     except Exception as e:

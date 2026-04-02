@@ -107,7 +107,7 @@ def semantic_chunking(
 
     for seg_idx, segment in enumerate(text_segments):
         logger.info(f"Chunking segment {seg_idx + 1}/{total_segments}...")
-        
+
         # 2. Extract sentences for THIS segment
         doc = nlp(segment)
         seg_sentences = []
@@ -119,7 +119,7 @@ def semantic_chunking(
                 seg_sentences.extend(_hard_split_text(s_text, 2000))
             else:
                 seg_sentences.append(s_text)
-        
+
         if not seg_sentences:
             continue
 
