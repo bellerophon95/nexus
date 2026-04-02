@@ -52,11 +52,15 @@ async def warmup_guardrails():
         logger.info(f"Warming up guardrail models (Env: {settings.ENV})...")
 
         if settings.ENV != "development":
-            # Only do heavy lifting in production (runs in a thread to keep loop free)
-            from backend.retrieval.reranker import get_model
-
+            # Sequential loading to avoid RAM spikes on low-memory containers
+            logger.info("Loading Presidio Analyzer...")
             await asyncio.to_thread(get_analyzer)
+            
+            logger.info("Loading Presidio Anonymizer...")
             await asyncio.to_thread(get_anonymizer)
+            
+            logger.info("Loading Reranker Model...")
+            from backend.retrieval.reranker import get_model
             await asyncio.to_thread(get_model)
 
         # Configure profanity with technical whitelist (Fast across all envs)

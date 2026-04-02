@@ -12,6 +12,8 @@
             flush_interval -1
             header_up Connection "keep-alive"
             header_up X-Accel-Buffering "no"
+            lb_try_duration 120s
+            lb_try_interval 5s
         }
     }
 
