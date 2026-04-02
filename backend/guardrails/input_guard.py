@@ -55,12 +55,13 @@ async def warmup_guardrails():
             # Sequential loading to avoid RAM spikes on low-memory containers
             logger.info("Loading Presidio Analyzer...")
             await asyncio.to_thread(get_analyzer)
-            
+
             logger.info("Loading Presidio Anonymizer...")
             await asyncio.to_thread(get_anonymizer)
-            
+
             logger.info("Loading Reranker Model...")
             from backend.retrieval.reranker import get_model
+
             await asyncio.to_thread(get_model)
 
         # Configure profanity with technical whitelist (Fast across all envs)
