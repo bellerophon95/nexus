@@ -37,7 +37,8 @@ RUN pip install --no-cache-dir \
     "python-dotenv>=1.0" \
     "python-multipart>=0.0.12" \
     "aiohttp>=3.10" \
-    "requests==2.31.0"
+    "requests==2.31.0" \
+    "python-jose[cryptography]==3.3.0"
 
 # --- Layer 3: AI / LLM clients ---
 RUN pip install --no-cache-dir \
@@ -91,7 +92,7 @@ RUN pip install --no-cache-dir \
     "presidio-anonymizer>=2.2.351"
 
 # --- VERIFICATION: fail the build early if critical imports are missing ---
-RUN python -c "import langgraph; import anthropic; import langchain; print('All critical imports verified OK')"
+RUN python -c "import langgraph; import anthropic; import langchain; import jose; print('All critical imports verified OK')"
 
 # --- Pre-download SentenceTransformer model ---
 COPY scripts/download_models.py ./scripts/download_models.py
