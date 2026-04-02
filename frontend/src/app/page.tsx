@@ -43,6 +43,15 @@ export default function Home() {
   const [refreshHistoryTrigger, setRefreshHistoryTrigger] = useState(0);
   const [sessionId, setSessionId] = useState<string>("");
   const [accessTier, setAccessTier] = useState<string>("visitor");
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+
+  const toggleSkill = (skillId: string) => {
+    setSelectedSkills(prev => 
+      prev.includes(skillId) 
+        ? prev.filter(id => id !== skillId) 
+        : [...prev, skillId]
+    );
+  };
 
   useEffect(() => {
     // 1. Initialize session and handle access params once on mount
@@ -159,6 +168,7 @@ export default function Home() {
             isActive={activeTab === "chat"} 
             onClick={() => setActiveTab("chat")}
             isOpen={isSidebarOpen}
+            badge={selectedSkills.length > 0 ? selectedSkills.length : undefined}
           />
           <SidebarItem 
              icon={<Library className="h-4 w-4" />} 
@@ -166,6 +176,7 @@ export default function Home() {
              isActive={activeTab === "library"} 
              onClick={() => setActiveTab("library")}
              isOpen={isSidebarOpen}
+             badge={selectedSkills.length > 0 ? selectedSkills.length : undefined}
           />
 
           {isSidebarOpen && (
@@ -201,11 +212,11 @@ export default function Home() {
             <div className="p-3 border-b border-slate-800/50">
               <div className="flex items-center gap-3 px-2">
                 <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-[10px] font-black text-white italic shadow-lg shadow-blue-500/10">
-                  {accessTier === 'recruiter' ? 'GR' : 'NR'}
+                  RS
                 </div>
                 <div className="flex flex-col overflow-hidden">
                    <span className="text-[11px] font-bold text-slate-200 leading-tight truncate">
-                     {accessTier === 'recruiter' ? 'Guest Recruiter' : 'Nexus Researcher'}
+                     Researcher
                    </span>
                    <span className="text-[9px] text-slate-500 font-medium tracking-tight truncate">
                      ID: #{sessionId.slice(0, 8)}
@@ -328,7 +339,10 @@ export default function Home() {
             <MetricsPanel metrics={metrics} isLoading={isMetricsLoading} />
           </div>
         ) : activeTab === "library" ? (
-          <KnowledgeHub />
+          <KnowledgeHub 
+            selectedSkills={selectedSkills} 
+            onToggleSkill={toggleSkill} 
+          />
         ) : (
           <div className="flex h-full flex-col items-center justify-center space-y-4 text-center">
             <Settings className="h-12 w-12 text-slate-800 animate-pulse" />
@@ -342,7 +356,7 @@ export default function Home() {
   );
 }
 
-function SidebarItem({ icon, label, isActive, onClick, isOpen }: { icon: React.ReactNode, label: string, isActive: boolean, onClick: () => void, isOpen: boolean }) {
+function SidebarItem({ icon, label, isActive, onClick, isOpen, badge }: { icon: React.ReactNode, label: string, isActive: boolean, onClick: () => void, isOpen: boolean, badge?: number }) {
   return (
     <button
       onClick={onClick}
@@ -361,7 +375,12 @@ function SidebarItem({ icon, label, isActive, onClick, isOpen }: { icon: React.R
         {icon}
       </div>
       {isOpen && <span className="text-[13px] font-medium tracking-tight whitespace-nowrap">{label}</span>}
-      {isOpen && isActive && <ChevronRight className="ml-auto h-3 w-3 text-blue-500/50" />}
+      {isOpen && badge !== undefined && (
+        <span className="ml-auto flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow-lg shadow-blue-500/20">
+          {badge}
+        </span>
+      )}
+      {isOpen && isActive && badge === undefined && <ChevronRight className="ml-auto h-3 w-3 text-blue-500/50" />}
     </button>
   );
 }

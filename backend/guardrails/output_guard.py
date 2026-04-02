@@ -35,8 +35,12 @@ def get_profanity():
     from better_profanity import profanity
 
     if not _profanity_loaded:
-        profanity.load_censor_words(whitelist_words=TECHNICAL_WHITELIST)
-        _profanity_loaded = True
+        try:
+            # better-profanity v0.7.0 uses load_censor_words
+            profanity.load_censor_words(whitelist_words=TECHNICAL_WHITELIST)
+            _profanity_loaded = True
+        except Exception as e:
+            logger.error(f"Failed to load profanity words: {e}")
     return profanity
 
 

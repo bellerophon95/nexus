@@ -166,6 +166,7 @@ async def query_streaming(
                     asyncio.to_thread(
                         search_knowledge_base,
                         effective_q,
+                        user_id=user_id,
                         match_threshold=match_threshold,
                         rerank=rerank,
                     )

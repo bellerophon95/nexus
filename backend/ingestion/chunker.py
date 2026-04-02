@@ -93,7 +93,8 @@ def semantic_chunking(
         )
 
     # 1. Segment massive text into manageable blocks
-    SEGMENT_SIZE = 500000 if not is_massive else 1000000
+    # 2,000,000 chars (~2MB) is the sweet spot for keeping RAM < 1GB
+    SEGMENT_SIZE = 1000000 if not is_massive else 2000000
     text_segments = [text[i : i + SEGMENT_SIZE] for i in range(0, len(text), SEGMENT_SIZE)]
     total_segments = len(text_segments)
 
@@ -101,98 +102,77 @@ def semantic_chunking(
         f"Processing {total_segments} segments (Mode: {'High-Performance' if is_massive else 'Standard'})"
     )
 
-    all_sentences = []
+    all_chunks = []
+    current_global_idx = 0
 
-    # 2. Extract sentences using nlp.pipe for efficiency
-    # Progress: 20% -> 30% for sentence extraction
-    extraction_start = start_progress
-    extraction_end = start_progress + (end_progress - start_progress) * 0.3
-
-    logger.info("Extracting sentences...")
-    docs = nlp.pipe(text_segments, batch_size=8)
-
-    for i, doc in enumerate(docs):
+    for seg_idx, segment in enumerate(text_segments):
+        logger.info(f"Chunking segment {seg_idx + 1}/{total_segments}...")
+        
+        # 2. Extract sentences for THIS segment
+        doc = nlp(segment)
+        seg_sentences = []
         for sent in doc.sents:
             s_text = sent.text.strip()
             if not s_text:
                 continue
-
-            # Safety Valve: If sentencizer fails (due to no punctuation/garbage),
-            # don't allow a single "sentence" to be huge.
             if len(s_text) > 4000:
-                logger.warning(
-                    f"Extremely long sentence detected ({len(s_text)} chars). Forcing hard-split."
-                )
-                all_sentences.extend(_hard_split_text(s_text, 2000))
+                seg_sentences.extend(_hard_split_text(s_text, 2000))
             else:
-                all_sentences.append(s_text)
+                seg_sentences.append(s_text)
+        
+        if not seg_sentences:
+            continue
+
+        # 3. Embed sentences for THIS segment
+        # This prevents the embedding matrix from growing to the size of the whole doc
+        embeddings = model.encode(seg_sentences, batch_size=64, show_progress_bar=False)
+
+        # 4. Semantic Splitting for THIS segment
+        distances = []
+        for i in range(len(embeddings) - 1):
+            norm_a = np.linalg.norm(embeddings[i])
+            norm_b = np.linalg.norm(embeddings[i + 1])
+            sim = (
+                np.dot(embeddings[i], embeddings[i + 1]) / (norm_a * norm_b)
+                if norm_a > 0 and norm_b > 0
+                else 0.0
+            )
+            distances.append(1 - sim)
+
+        # Identify breakpoints
+        breakpoint_threshold = np.percentile(distances, threshold_percentile) if distances else 0.5
+        breakpoints = [i for i, x in enumerate(distances) if x > breakpoint_threshold]
+
+        start_sent_idx = 0
+        for b_idx in breakpoints:
+            chunk_text = " ".join(seg_sentences[start_sent_idx : b_idx + 1])
+            all_chunks.append(
+                Chunk(
+                    text=chunk_text,
+                    index=current_global_idx,
+                    token_count=len(tokenizer.encode(chunk_text)),
+                    metadata=metadata.copy(),
+                )
+            )
+            start_sent_idx = b_idx + 1
+            current_global_idx += 1
+
+        # Final block for this segment
+        if start_sent_idx < len(seg_sentences):
+            chunk_text = " ".join(seg_sentences[start_sent_idx:])
+            all_chunks.append(
+                Chunk(
+                    text=chunk_text,
+                    index=current_global_idx,
+                    token_count=len(tokenizer.encode(chunk_text)),
+                    metadata=metadata.copy(),
+                )
+            )
+            current_global_idx += 1
 
         if progress_callback:
-            p = extraction_start + (i + 1) / total_segments * (extraction_end - extraction_start)
-            progress_callback(min(p, extraction_end))
+            p = start_progress + (seg_idx + 1) / total_segments * (end_progress - start_progress)
+            progress_callback(min(p, end_progress))
 
-    if not all_sentences:
-        return []
-
-    # 3. Batch Embed sentences (much faster than per-segment)
-    # Progress: 30% -> 40% for batch embedding
-    embedding_start = extraction_end
-    embedding_end = end_progress
-
-    logger.info(f"Batch embedding {len(all_sentences)} sentences...")
-    if progress_callback:
-        progress_callback(embedding_start)
-
-    embeddings = model.encode(all_sentences, batch_size=64, show_progress_bar=False)
-
-    if progress_callback:
-        progress_callback(embedding_end)
-
-    # 4. Semantic Splitting based on embeddings
-    logger.info("Calculating semantic boundaries...")
-    distances = []
-    for i in range(len(embeddings) - 1):
-        norm_a = np.linalg.norm(embeddings[i])
-        norm_b = np.linalg.norm(embeddings[i + 1])
-        sim = (
-            np.dot(embeddings[i], embeddings[i + 1]) / (norm_a * norm_b)
-            if norm_a > 0 and norm_b > 0
-            else 0.0
-        )
-        distances.append(1 - sim)
-
-    # Identify breakpoints
-    breakpoint_threshold = np.percentile(distances, threshold_percentile) if distances else 0.5
-    breakpoints = [i for i, x in enumerate(distances) if x > breakpoint_threshold]
-
-    all_chunks = []
-    current_global_idx = 0
-    start_sent_idx = 0
-
-    for breakpoint_idx in breakpoints:
-        chunk_text = " ".join(all_sentences[start_sent_idx : breakpoint_idx + 1])
-        all_chunks.append(
-            Chunk(
-                text=chunk_text,
-                index=current_global_idx,
-                token_count=len(tokenizer.encode(chunk_text)),
-                metadata=metadata.copy(),
-            )
-        )
-        start_sent_idx = breakpoint_idx + 1
-        current_global_idx += 1
-
-    # Final block
-    if start_sent_idx < len(all_sentences):
-        chunk_text = " ".join(all_sentences[start_sent_idx:])
-        all_chunks.append(
-            Chunk(
-                text=chunk_text,
-                index=current_global_idx,
-                token_count=len(tokenizer.encode(chunk_text)),
-                metadata=metadata.copy(),
-            )
-        )
-
-    logger.info(f"Completed semantic chunking: {len(all_chunks)} chunks generated.")
+    logger.info(f"Completed segmented semantic chunking: {len(all_chunks)} chunks generated.")
     return all_chunks

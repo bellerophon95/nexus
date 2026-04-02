@@ -35,3 +35,5 @@ class NexusState(TypedDict):
     query: str
     # Log of agent activities for UI visualization (node, status, timestamp)
     activity_log: Annotated[list[dict[str, Any]], operator.add]
+    # Current user ID for filtering retrieval
+    user_id: str | None

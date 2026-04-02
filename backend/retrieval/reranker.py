@@ -42,8 +42,9 @@ def rerank_results(
     # Prepare pairs for cross-encoder (Query, [Title + Text])
     pairs = []
     for chunk in chunks:
-        # If title is available from the new metadata-aware search, prepend it
-        title_prefix = f"Document: {chunk.get('title', 'Unknown')}\n"
+        # Check both top-level (if flattened by searcher) and nested metadata
+        title = chunk.get("title") or chunk.get("metadata", {}).get("title", "Unknown")
+        title_prefix = f"Document: {title}\n"
         content = f"{title_prefix}Text: {chunk['text']}"
         pairs.append([query, content])
 

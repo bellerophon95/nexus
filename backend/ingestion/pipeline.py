@@ -101,6 +101,37 @@ def process_single_chunk(chunk_text: str, token_count: int) -> dict[str, Any]:
     }
 
 
+@observe(name="Process Chunks Batch")
+def process_chunks_batch(chunk_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Phase 2: Enrich and Embed a list of chunks efficiently.
+    chunk_data should be a list of dicts with 'text' and 'token_count' keys.
+    """
+    from backend.ingestion.embedder import embed_chunks_batch
+    from backend.ingestion.enricher import enrich_chunks_batch
+
+    texts = [c["text"] for c in chunk_data]
+
+    # Batch enrich and embed
+    batch_enrichments = enrich_chunks_batch(texts)
+    batch_embeddings = embed_chunks_batch(texts)
+
+    results = []
+    for i in range(len(chunk_data)):
+        results.append(
+            {
+                "text": texts[i],
+                "token_count": chunk_data[i]["token_count"],
+                "entities": batch_enrichments[i]["entities"],
+                "topics": batch_enrichments[i]["topics"],
+                "key_phrases": batch_enrichments[i]["key_phrases"],
+                "sparse_tokens": batch_embeddings[i]["sparse_tokens"],
+                "embedding": batch_embeddings[i]["embedding"],
+            }
+        )
+    return results
+
+
 @observe(name="Finalize Ingestion")
 def finalize_ingestion(
     full_text: str,
@@ -132,6 +163,16 @@ def finalize_ingestion(
         user_id=user_id,
         is_personal=is_personal,
     )
+
+    # Cleanup temp file if it's in the uploads directory
+    if "/tmp/uploads" in file_path or "tmp/uploads" in file_path:
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Cleaned up temporary upload: {file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to cleanup temp file {file_path}: {e}")
+
     return doc_id
 
 
@@ -173,7 +214,7 @@ def run_ingestion_pipeline(
         is_personal=is_personal,
     )
 
-    insert_chunks(doc_id, processed_chunks, user_id=user_id)
+    insert_chunks(doc_id, processed_chunks, user_id=user_id, is_personal=is_personal)
 
     if progress_callback:
         progress_callback(100.0)

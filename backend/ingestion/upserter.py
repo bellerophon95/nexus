@@ -54,7 +54,12 @@ def upsert_document(
 
 
 @observe()
-def insert_chunks(document_id: str, chunks_data: list[dict[str, Any]], user_id: str | None = None):
+def insert_chunks(
+    document_id: str,
+    chunks_data: list[dict[str, Any]],
+    user_id: str | None = None,
+    is_personal: bool = True,
+):
     """
     Inserts a list of processed chunks into the chunks table in Supabase.
     Each item in chunks_data should match the chunks table schema.
@@ -73,6 +78,7 @@ def insert_chunks(document_id: str, chunks_data: list[dict[str, Any]], user_id: 
                 "sparse_tokens": chunk["sparse_tokens"],
                 "embedding": chunk["embedding"],
                 "user_id": user_id,
+                "is_personal": is_personal,
             }
             payload.append(item)
 
@@ -104,6 +110,7 @@ def insert_chunks(document_id: str, chunks_data: list[dict[str, Any]], user_id: 
                     "topics": chunk["topics"],
                     "key_phrases": chunk["key_phrases"],
                     "user_id": user_id,
+                    "is_personal": is_personal,
                 },
             )
             qdrant_points.append(point)

@@ -24,7 +24,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-export function KnowledgeHub() {
+interface KnowledgeHubProps {
+  selectedSkills: string[];
+  onToggleSkill: (skillId: string) => void;
+}
+
+export function KnowledgeHub({ selectedSkills, onToggleSkill }: KnowledgeHubProps) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -114,7 +119,10 @@ export function KnowledgeHub() {
             showTitle={false} 
           />
         ) : (
-          <SkillHub />
+          <SkillHub 
+            selectedSkills={selectedSkills}
+            onToggleSkill={onToggleSkill}
+          />
         )}
       </div>
     </div>

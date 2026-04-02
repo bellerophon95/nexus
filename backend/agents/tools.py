@@ -9,16 +9,18 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-def vector_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
+def vector_search(query: str, user_id: str | None = None, limit: int = 5) -> list[dict[str, Any]]:
     """
     Search the Project Nexus knowledge base for relevant document chunks.
     Use this tool to find factual information, technical details, or context
     needed to answer a user's question.
     """
     try:
-        logger.info(f"Executing vector search for query: {query}")
+        logger.info(f"Executing vector search for query: {query} (user_id: {user_id})")
         # Use our existing hybrid search + reranking pipeline
-        results = search_knowledge_base(query=query, limit=limit, rerank=True, match_threshold=0.2)
+        results = search_knowledge_base(
+            query=query, user_id=user_id, limit=limit, rerank=True, match_threshold=0.2
+        )
 
         # Format results for the agent
         formatted_results = []

@@ -4,11 +4,12 @@ import logging
 import random
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.agents.graph import nexus_graph
+from backend.api.security import get_user_id
 from backend.config import settings
 from backend.evaluation.llm_judge import llm_judge_evaluate_async
 from backend.evaluation.ragas_eval import run_ragas_eval_async
@@ -28,7 +29,7 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat")
 @observe(name="API: Agentic Chat (Stream)")
-async def chat_agents(request: ChatRequest):
+async def chat_agents(request: ChatRequest, user_id: str | None = Depends(get_user_id)):
     """
     Unified agentic chat endpoint that runs the LangGraph workflow.
     Streams back individual agent steps as JSON.
@@ -63,6 +64,7 @@ async def chat_agents(request: ChatRequest):
             "final_answer": "",
             "pii_detected": pii_types,
             "query": current_query,
+            "user_id": user_id,
         }
 
         try:
@@ -103,7 +105,11 @@ async def chat_agents(request: ChatRequest):
 
 @router.post("/ask_agent")
 @observe(name="API: Agentic Ask (Sync)")
-async def ask_agent(request: ChatRequest, background_tasks: BackgroundTasks):
+async def ask_agent(
+    request: ChatRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str | None = Depends(get_user_id),
+):
     """
     Synchronous version of the agent chat for simpler consumers.
     """
@@ -128,6 +134,7 @@ async def ask_agent(request: ChatRequest, background_tasks: BackgroundTasks):
         "final_answer": "",
         "pii_detected": pii_types,
         "query": current_query,
+        "user_id": user_id,
     }
 
     try:

@@ -1,7 +1,9 @@
 import logging
 
 from fastapi import APIRouter, HTTPException
+from qdrant_client import models
 
+from backend.database.qdrant import get_qdrant
 from backend.database.supabase import get_supabase
 from backend.observability.tracing import observe
 
@@ -61,11 +63,14 @@ def delete_document(document_id: str):
 def share_document(document_id: str):
     """
     Marks a personal document as shared (is_personal = false).
-    This action is irreversible.
+    Also clears the user_id on all associated chunks to make them globally searchable.
     """
     try:
+        supabase = get_supabase()
+        
+        # 1. Update the document record
         response = (
-            get_supabase()
+            supabase
             .table("documents")
             .update({"is_personal": False})
             .eq("id", document_id)
@@ -75,8 +80,41 @@ def share_document(document_id: str):
         if not response.data:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        logger.info(f"Successfully shared document: {document_id}")
-        return {"status": "success", "message": f"Document {document_id} is now shared."}
+        # 2. Propagate to chunks in Supabase (Set user_id to NULL)
+        (
+            supabase
+            .table("chunks")
+            .update({"user_id": None})
+            .eq("document_id", document_id)
+            .execute()
+        )
+
+        # 3. Propagate to Qdrant (Set user_id to NULL in payload)
+        try:
+            qdrant = get_qdrant()
+            qdrant.set_payload(
+                collection_name="nexus_chunks",
+                payload={
+                    "user_id": None,
+                    "is_personal": False
+                },
+                points=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="document_id",
+                            match=models.MatchValue(value=document_id)
+                        )
+                    ]
+                )
+            )
+            logger.info(f"Successfully updated Qdrant payloads for document: {document_id}")
+        except Exception as qe:
+            logger.error(f"Failed to update Qdrant payloads for document {document_id}: {qe}")
+            # We don't raise here to avoid failing the whole request if only Qdrant sync fails, 
+            # but ideally we want consistency.
+
+        logger.info(f"Successfully shared document {document_id} and its associated chunks.")
+        return {"status": "success", "message": f"Document {document_id} and its chunks are now shared globally."}
     except HTTPException:
         raise
     except Exception as e:

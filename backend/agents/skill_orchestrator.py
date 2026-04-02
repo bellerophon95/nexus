@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 
 from openai import AsyncOpenAI
 
@@ -21,22 +22,51 @@ class SkillOrchestrator:
         self._load_lock = asyncio.Lock()
 
     async def load_database_skills(self):
-        """Loads the latest skills index from the Supabase registry."""
+        """Loads the latest skills index by merging local and database registries."""
         async with self._load_lock:
-            # Re-fetch from Supabase to ensure real-time skill updates
+            # 1. Initial load from local registry (Standard Skills)
+            self._load_local_registry()
+            local_count = len(self.skills_index)
+
+            # 2. Re-fetch from Supabase to augment with dynamic skills
             try:
                 supabase = await get_async_supabase()
                 response = await supabase.table("skills").select("*").execute()
 
                 if response.data:
-                    self.skills_index = response.data
-                    logger.info(f"Loaded {len(self.skills_index)} expert skills from Supabase.")
+                    # Merge by ID, database takes precedence for matching IDs
+                    remote_skills = {s["id"]: s for s in response.data}
+                    local_skills = {s["id"]: s for s in self.skills_index}
+                    
+                    merged = {**local_skills, **remote_skills}
+                    self.skills_index = list(merged.values())
+                    logger.info(f"Loaded {len(self.skills_index)} expert skills ({local_count} local, {len(remote_skills)} remote).")
                 else:
-                    logger.warning("Skill registry is empty in Supabase.")
-                    self.skills_index = []
+                    logger.warning("Supabase skill registry empty. Using only local definitions.")
+
             except Exception as e:
-                logger.error(f"Failed to load database skill manifests: {e}")
+                logger.error(f"Failed to load database skill manifests: {e}. Using local fallback.")
+
+    def _load_local_registry(self):
+        """Loads skills from the local registry.json file as a fallback."""
+        try:
+            registry_path = os.path.join("backend", "skills", "registry.json")
+            if os.path.exists(registry_path):
+                with open(registry_path) as f:
+                    data = json.load(f)
+                    # Flatten local registry format to match Supabase schema
+                    self.skills_index = []
+                    for item in data:
+                        skill = {"id": item["id"]}
+                        skill.update(item.get("metadata", {}))
+                        self.skills_index.append(skill)
+                logger.info(f"Loaded {len(self.skills_index)} expert skills from local registry.")
+            else:
+                logger.error(f"Local registry not found at {registry_path}")
                 self.skills_index = []
+        except Exception as e:
+            logger.error(f"Failed to load local skill registry: {e}")
+            self.skills_index = []
 
     async def get_relevant_skills(self, query: str, top_k: int = 3) -> list[dict]:
         """Uses LLM to select the most relevant skills for a given query."""

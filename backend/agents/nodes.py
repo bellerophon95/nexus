@@ -98,7 +98,10 @@ async def researcher_node(state: NexusState) -> dict[str, Any]:
             if tool_call["name"] == "vector_search":
                 from backend.agents.tools import vector_search
 
-                results = vector_search.invoke(tool_call["args"])
+                # Inject user_id from state into the tool call arguments
+                args = dict(tool_call["args"])
+                args["user_id"] = state.get("user_id")
+                results = vector_search.invoke(args)
                 if isinstance(results, list):
                     # Filter out error dicts
                     valid_results = [r for r in results if "error" not in r]
