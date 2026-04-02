@@ -42,3 +42,9 @@ local_data/
 *.tfstate.backup
 *.tfvars
 .terraform.lock.hcl
+/tmp/
+*.txt
+*.pdf
+*.docx
+*.csv
+*.log

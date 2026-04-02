@@ -4,7 +4,7 @@ import os
 import shutil
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from backend.api.security import get_user_id, rate_limit_dependency
@@ -55,6 +55,9 @@ def process_ingestion_task(
         chunks = result["chunks"]
         total_chunks = len(chunks)
 
+        # Initialize chunk_count immediately to avoid division-by-zero in worker
+        supabase.table("ingestion_tasks").update({"chunk_count": total_chunks}).eq("id", task_id).execute()
+
         # 2. Queue Chunks in DB
         chunk_records = []
         for i, chunk in enumerate(chunks):
@@ -67,27 +70,43 @@ def process_ingestion_task(
                         "token_count": chunk.token_count,
                         "fingerprint": str(result["fingerprint"]),
                         "title": result["title"],
-                        "full_text": result["full_text"],  # Store for final summarization
-                        "file_path": file_path,
                     },
                     "status": "pending",
                 }
             )
 
         # Bulk insert chunks (Supabase handles up to a few thousand rows easily)
-        # We do this in batches of 200 to be safe with payload sizes
-        BATCH_SIZE = 200
+        # 500 is a safe middle ground for payload size with metadata decoupling.
+        # We add simple retry logic to handle transient Supabase/Network flakiness.
+        BATCH_SIZE = 500
         for i in range(0, len(chunk_records), BATCH_SIZE):
             batch = chunk_records[i : i + BATCH_SIZE]
-            supabase.table("ingestion_chunks").insert(batch).execute()
+            
+            # Simple retry loop (max 3 attempts)
+            for attempt in range(1, 4):
+                try:
+                    supabase.table("ingestion_chunks").insert(batch).execute()
+                    break
+                except Exception as e:
+                    if attempt == 3:
+                        raise e
+                    logger.warning(f"Batch insert attempt {attempt} failed for task {task_id}: {e}. Retrying...")
+                    time.sleep(1)
 
-        # 3. Update Task Status
+        # 3. Update Task Status & Storage Meta
         supabase.table("ingestion_tasks").update(
             {
                 "status": "processing",
                 "progress": 10.0,
                 "chunk_count": total_chunks,
                 "message": f"Queued {total_chunks} chunks for background processing.",
+                "metadata": {
+                    "full_text": result["full_text"],
+                    "fingerprint": str(result["fingerprint"]),
+                    "title": result["title"],
+                    "file_path": file_path,
+                    "is_personal": is_personal,
+                },
             }
         ).eq("id", task_id).execute()
 
@@ -107,7 +126,7 @@ def process_ingestion_task(
 async def ingest_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    is_personal: bool = True,
+    is_personal: bool = Form(True),
     user_id: str = Depends(get_user_id),
     _=Depends(rate_limit_dependency),
 ):
@@ -161,6 +180,7 @@ async def ingest_file(
                     "progress": 0,
                     "filename": file.filename,
                     "user_id": user_id,
+                    "is_personal": is_personal,
                 }
             )
             .execute()

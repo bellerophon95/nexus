@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { API_BASE_URL } from "@/lib/constants";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface UploadPanelProps {
   onUploadSuccess?: (docId: string, chunks: number) => void;
@@ -59,7 +60,9 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
       if (!isMounted) return;
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/ingest/status/${taskId}`);
+        const response = await fetch(`${API_BASE_URL}/api/ingest/status/${taskId}`, {
+          headers: getAuthHeaders(),
+        });
         
         if (response.status === 404) {
           setStatus("error");
@@ -122,6 +125,7 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
     try {
       const response = await fetch(`${API_BASE_URL}/api/ingest`, {
         method: "POST",
+        headers: getAuthHeaders(),
         body: formData,
       });
 
