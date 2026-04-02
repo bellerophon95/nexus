@@ -1,7 +1,5 @@
-FROM python:3.12.4-slim
-
-# Bust cache on every build to prevent stale layer issues
-ARG CACHE_BUST=20240330
+# Base image for all stages
+FROM python:3.12.4-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -11,7 +9,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# System dependencies
+# --- Stage 1: Build-ready Base ---
+FROM base AS base-builder
+
+# Combined system dependencies for all builders to simplify
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
@@ -25,11 +26,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# --- Layer 1: Pin numpy early so every subsequent package builds against it ---
-RUN pip install --no-cache-dir "numpy==1.26.4"
+# Pre-pin numpy for consistency across parallel segments
+RUN pip install "numpy==1.26.4"
 
-# --- Layer 2: Core web framework ---
-RUN pip install --no-cache-dir \
+# --- Stage 2a: Parallel ML Builder ---
+# This stage only handles the heavy compute stack
+FROM base-builder AS ml-builder
+RUN pip install --prefix=/install/ml \
+    "torch>=2.0.0" \
+    "transformers>=4.40.0" \
+    "sentence-transformers>=3.0"
+
+# --- Stage 2b: Parallel NLP & Tools Builder ---
+# This stage handles document parsing, spacy, and pii tools
+FROM base-builder AS nlp-builder
+RUN pip install --prefix=/install/nlp \
+    "spacy>=3.7" \
+    "unstructured[pdf]>=0.15" \
+    "pypdf>=5.1.0" \
+    "python-magic>=0.4.27" \
+    "simhash>=2.0" \
+    "yake>=0.4" \
+    "better-profanity==0.7.0" \
+    "presidio-analyzer>=2.2.351" \
+    "presidio-anonymizer>=2.2.351"
+
+# --- Stage 2c: Core API & Ecosystem Builder ---
+# Fast to build, handles all the web and data clients
+FROM base-builder AS core-builder
+RUN pip install --prefix=/install/core \
     "fastapi>=0.115" \
     "uvicorn[standard]>=0.34" \
     "pydantic>=2.10" \
@@ -38,67 +63,59 @@ RUN pip install --no-cache-dir \
     "python-multipart>=0.0.12" \
     "aiohttp>=3.10" \
     "requests==2.31.0" \
-    "python-jose[cryptography]==3.3.0"
-
-# --- Layer 3: AI / LLM clients ---
-RUN pip install --no-cache-dir \
+    "python-jose[cryptography]==3.3.0" \
     "openai==1.55.3" \
     "anthropic==0.40.0" \
-    "tiktoken>=0.7"
-
-# --- Layer 4: LangChain ecosystem (pinned for ragas 0.1.21 compatibility) ---
-RUN pip install --no-cache-dir \
+    "tiktoken>=0.7" \
     "langchain>=0.2.0,<0.3.0" \
     "langchain-core>=0.2.0,<0.3.0" \
     "langchain-openai>=0.1.0,<0.2.0" \
     "langchain-community>=0.2.0,<0.3.0" \
-    "langgraph>=0.1.0,<0.2.0"
-
-# --- Layer 5: Storage / data clients ---
-RUN pip install --no-cache-dir \
+    "langgraph>=0.1.0,<0.2.0" \
     "qdrant-client>=1.12" \
     "supabase>=2.13" \
     "upstash-redis>=1.2" \
     "datasets>=2.19" \
-    "pandas>=2.2"
+    "pandas>=2.2" \
+    "langfuse==2.57.12" \
+    "ragas==0.1.21"
 
-# --- Layer 6: ML models (heavy, kept in its own layer) ---
-RUN pip install --no-cache-dir \
-    "torch>=2.0.0" \
-    "transformers>=4.40.0" \
-    "sentence-transformers>=3.0"
+# --- Stage 3: Merge & Verify ---
+FROM base-builder AS final-builder
 
-# --- Layer 7: NLP / document processing ---
-RUN pip install --no-cache-dir \
-    "spacy>=3.7" \
-    "pypdf>=5.1.0" \
-    "python-magic>=0.4.27" \
-    "simhash>=2.0" \
-    "yake>=0.4" \
-    "better-profanity==0.7.0"
+# Merge all three parallel prefixes back into the primary environment
+# Note: Binaries go to /usr/local/bin, libs to /usr/local/lib/python3.12/site-packages
+COPY --from=core-builder /install/core /usr/local
+COPY --from=ml-builder /install/ml /usr/local
+COPY --from=nlp-builder /install/nlp /usr/local
 
-RUN pip install --no-cache-dir "unstructured[pdf]>=0.15"
-
-# --- Layer 8: spaCy model ---
+# Re-download the spacy model in the final merge step
 RUN python -m spacy download en_core_web_sm
 
-# --- Layer 9: Observability & evaluation (can conflict — last so nothing breaks earlier layers) ---
-RUN pip install --no-cache-dir "langfuse==2.57.12"
-RUN pip install --no-cache-dir "ragas==0.1.21"
+# Final verification
+RUN python -c "import langgraph; import anthropic; import langchain; import jose; import torch; print('All critical imports verified OK')"
 
-# --- Layer 10: PII / guardrails ---
-RUN pip install --no-cache-dir \
-    "presidio-analyzer>=2.2.351" \
-    "presidio-anonymizer>=2.2.351"
-
-# --- VERIFICATION: fail the build early if critical imports are missing ---
-RUN python -c "import langgraph; import anthropic; import langchain; import jose; print('All critical imports verified OK')"
-
-# --- Pre-download SentenceTransformer model ---
+# Pre-download SentenceTransformer model
 COPY scripts/download_models.py ./scripts/download_models.py
 RUN python scripts/download_models.py
 
-# --- Copy application code last (maximises layer cache reuse) ---
+# --- Stage 4: Production Runtime ---
+FROM base AS runtime
+
+# Copy only the system libraries required for runtime (libmagic1, poppler, etc)
+# Since they are in /usr/lib or /lib, we rely on the final-builder state or re-install
+# To keep it simple and robust, we use final-builder but clean it up.
+COPY --from=final-builder /usr/local /usr/local
+
+# Add the runtime system deps back (libmagic, libgl1, etc)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libmagic1 \
+    libglib2.0-0 \
+    poppler-utils \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
 COPY . .
 
 EXPOSE 8000

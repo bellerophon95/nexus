@@ -20,19 +20,14 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Install Linting Tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
-
       - name: Run Ruff Checks
         run: |
+          python -m pip install ruff
           ruff format --check backend/
           ruff check backend/
 
   build-backend:
     name: Build Backend
-    needs: validate
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -65,7 +60,6 @@ jobs:
 
   build-frontend:
     name: Build Frontend
-    needs: validate
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -100,7 +94,7 @@ jobs:
 
   deploy:
     name: Deploy to EC2
-    needs: [build-backend, build-frontend]
+    needs: [validate, build-backend, build-frontend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -169,10 +163,9 @@ jobs:
               \"echo $DC_B64 | base64 -d > docker-compose.prod.yml\",
               \"echo $CF_B64 | base64 -d > Caddyfile\",
               \"echo $ENV_B64 | base64 -d > .env\",
-              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY\",
               \"docker-compose -f docker-compose.prod.yml pull\",
               \"docker-compose -f docker-compose.prod.yml up -d --force-recreate\",
-              \"docker system prune -af\",
-              \"docker volume prune -f\"
+              \"docker system prune -af\"
             ]" \
             --region ${{ secrets.AWS_REGION }}
