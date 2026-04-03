@@ -40,3 +40,6 @@ class NexusState(TypedDict):
     # Retrieval settings from Tune Engine
     match_threshold: float
     rerank: bool
+    # New control fields for loop safety
+    search_count: int
+    is_greeting: bool

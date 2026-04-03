@@ -21,11 +21,25 @@ async def supervisor_node(state: NexusState) -> dict[str, Any]:
     """
     Acts as the orchestrator, deciding which agent to call next.
     """
-    logger.info("Entering Supervisor node")
+    # 1. Termination: If we already have a final answer, end the flow.
+    if state.get("final_answer"):
+        logger.info("Final answer present. Terminating graph.")
+        return {"current_agent": "end"}
 
-    # Check for hard stop
-    if state["iteration_count"] >= state["max_iterations"]:
-        logger.warning("Max iterations reached. Ending agent flow.")
+    # 2. Catch simple greetings/out-of-scope early to avoid search loops
+    query = state.get("query", "").lower()
+    greetings = ["hi", "hello", "howdy", "hey", "who are you", "what is this", "howdie"]
+    if (
+        any(g in query for g in greetings)
+        and not state["retrieved_chunks"]
+        and state["iteration_count"] == 0
+    ):
+        logger.info(f"Detected greeting/general query: '{query}'. Routing to analyst.")
+        return {"current_agent": "analyst", "is_greeting": True}
+
+    # 3. Check for hard stop (Max iterations or no progress after multiple searches)
+    if state["iteration_count"] >= state["max_iterations"] or state.get("search_count", 0) >= 2:
+        logger.warning("Max iterations or excessive search attempts reached. Ending agent flow.")
         return {"current_agent": "end"}
 
     system_prompt = (
@@ -36,7 +50,7 @@ async def supervisor_node(state: NexusState) -> dict[str, Any]:
         "3. validator: Fact-checks the analyst's draft against the context. ALWAYS call validator after analyst has drafted an answer.\n"
         "4. end: Finalizes the session ONLY after the validator has approved the answer.\n\n"
         "Current history is available in the state. Decide the next agent to invoke. "
-        "Return ONLY the name of the next agent."
+        "Return ONLY the name of the next agent. If no more research is possible or needed, call 'analyst' or 'end'."
     )
 
     # Build message list for LLM including history
@@ -53,6 +67,7 @@ async def supervisor_node(state: NexusState) -> dict[str, Any]:
         f"- Chunks Retrieved: {len(state['retrieved_chunks'])}\n"
         f"- Final Answer Drafted: {has_answer}\n"
         f"- Iteration: {state['iteration_count']}\n"
+        f"- Search Count: {state.get('search_count', 0)}\n"
         f"- Last Validation: {state['validation_status']}"
     )
     messages.append(HumanMessage(content=summary))
@@ -76,8 +91,6 @@ async def researcher_node(state: NexusState) -> dict[str, Any]:
     logger.info("Entering Researcher node")
 
     query = state["query"]
-    # We use vector search tool directly for now, or let LLM decide tool calls
-
     llm_with_tools = llm.bind_tools(NEXUS_TOOLS)
 
     response = llm_with_tools.invoke(
@@ -92,12 +105,14 @@ async def researcher_node(state: NexusState) -> dict[str, Any]:
     # Handle tool calls
     new_chunks = []
     status_msg = "Researcher found no new information."
+    search_triggered = 0
 
     if response.tool_calls:
         for tool_call in response.tool_calls:
             if tool_call["name"] == "vector_search":
                 from backend.agents.tools import vector_search
 
+                search_triggered = 1
                 # Inject user_id and Tune Engine settings from state into the tool call arguments
                 args = dict(tool_call["args"])
                 args["user_id"] = state.get("user_id")
@@ -117,6 +132,7 @@ async def researcher_node(state: NexusState) -> dict[str, Any]:
 
     return {
         "retrieved_chunks": state["retrieved_chunks"] + new_chunks,
+        "search_count": state.get("search_count", 0) + search_triggered,
         "messages": [AIMessage(content=status_msg)],
         "current_agent": "supervisor",
         "activity_log": [{"node": "researcher", "status": status_msg}],
@@ -130,10 +146,17 @@ async def analyst_node(state: NexusState) -> dict[str, Any]:
     """
     logger.info("Entering Analyst node")
 
+    # Handle greetings or empty context
+    if state.get("is_greeting"):
+        return {
+            "final_answer": "Hello! I am Nexus AI. I'm ready to help you research and analyze your documents. What would you like to know?",
+            "current_agent": "supervisor",  # Route to supervisor to finalize via validator or end
+        }
+
     if not state["retrieved_chunks"]:
         return {
-            "final_answer": "I don't have enough information to answer that.",
-            "current_agent": "end",
+            "final_answer": "I'm sorry, I couldn't find any information locally related to your request. Please try broadening your search or check if the relevant documents have been uploaded.",
+            "current_agent": "supervisor",
         }
 
     context_text = "\n".join(

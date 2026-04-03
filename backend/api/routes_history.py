@@ -29,16 +29,20 @@ async def list_conversations(
     Returns a list of recent conversation threads.
     Now filtered by user_id for shadow auth.
     """
+    # 2. List Threads
     try:
         # Shadow Auth: Sync user registration
         access_tier = request.headers.get("X-Nexus-Access-Tier") or "visitor"
+        logger.info(f"Fetching history for user_id: {user_id} (Access Tier: {access_tier})")
+
         if user_id:
             await sync_user(user_id, access_tier)
 
         conversations = await get_conversations(user_id=user_id, limit=limit)
+        logger.info(f"Retrieved {len(conversations)} threads for user {user_id}")
         return {"conversations": conversations}
     except Exception as e:
-        logger.error(f"Failed to list conversations: {e}")
+        logger.error(f"Failed to list conversations for user {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -161,6 +161,8 @@ async def query_streaming(
                 "retrieved_chunks": [],
                 "iteration_count": 0,
                 "max_iterations": max_iterations,
+                "search_count": 0,
+                "is_greeting": False,
                 "validation_status": "pending",
                 "hallucination_score": 0.0,
                 "final_answer": "",
@@ -180,37 +182,39 @@ async def query_streaming(
             citations = []
 
             # Execute graph and stream steps
-            async for step in nexus_graph.astream(initial_state):
-                if await request.is_disconnected():
-                    logger.info("Client disconnected during agentic flow")
-                    break
+            try:
+                async for step in nexus_graph.astream(initial_state):
+                    if await request.is_disconnected():
+                        logger.info("Client disconnected during agentic flow")
+                        break
 
-                # 'step' is a dict of {node_name: state_updates}
-                node_name = next(iter(step.keys()))
-                updates = step[node_name]
+                    # 'step' is a dict of {node_name: state_updates}
+                    node_name = next(iter(step.keys()))
+                    updates = step[node_name]
 
-                # Yield agent step for UI tracking
-                agent_name = updates.get("current_agent", node_name).capitalize()
-                # Status description mapping
-                status_desc = "Working..."
-                if updates.get("activity_log"):
-                    status_desc = updates["activity_log"][-1].get("status", "Working...")
+                    # Yield agent step for UI tracking
+                    agent_name = node_name.capitalize()
+                    status_desc = "Working..."
+                    if updates.get("activity_log"):
+                        status_desc = updates["activity_log"][-1].get("status", "Working...")
 
-                yield await yield_agent_step(agent_name, node_name, "completed")
-                yield f"data: {json.dumps({'type': 'activity', 'node': node_name, 'status': status_desc, 'status_type': 'completed'})}\n\n"
+                    yield await yield_agent_step(agent_name, node_name, "completed")
+                    yield f"data: {json.dumps({'type': 'activity', 'node': node_name, 'status': status_desc, 'status_type': 'completed'})}\n\n"
 
-                # If this node produced the final answer, stream its tokens
-                if updates.get("final_answer") and not full_answer:
-                    full_answer = updates["final_answer"]
-                    # Simulate token-by-token streaming for the frontend "typing" effect
-                    for token in full_answer.split(" "):
-                        yield f"data: {json.dumps({'type': 'token', 'content': token + ' '})}\n\n"
-                        await asyncio.sleep(0.02)
+                    # Capture tokens if analyst node yields final_answer
+                    if updates.get("final_answer") and not full_answer:
+                        full_answer = updates["final_answer"]
+                        # Simulate token-by-token streaming for the frontend "typing" effect
+                        for token in full_answer.split(" "):
+                            yield f"data: {json.dumps({'type': 'token', 'content': token + ' '})}\n\n"
+                            await asyncio.sleep(0.01)
 
-                    # Capture citations from the state
+                    # Capture citations from the state if present in the final update or analyst update
                     if "retrieved_chunks" in updates:
+                        # Clear and update to avoid duplicates if nodes return same chunks
+                        new_citations = []
                         for i, chunk in enumerate(updates["retrieved_chunks"]):
-                            citations.append(
+                            new_citations.append(
                                 {
                                     "id": i + 1,
                                     "document_id": chunk.get("document_id", f"doc_{i}"),
@@ -219,8 +223,19 @@ async def query_streaming(
                                     "metadata": chunk.get("metadata", {}),
                                 }
                             )
+                        citations = new_citations
 
-                last_heartbeat = time.perf_counter()
+                    last_heartbeat = time.perf_counter()
+                    yield await heartbeat() or ""
+
+            except Exception as e:
+                # Catch recursion limits or graph issues
+                if "recursion limit" in str(e).lower():
+                    logger.error("LangGraph recursion limit reached")
+                    full_answer = "I've searched extensively but couldn't find a definitive answer in your documents. Please try a more specific question."
+                    yield f"data: {json.dumps({'type': 'token', 'content': f'\n\n{full_answer}'})}\n\n"
+                else:
+                    raise e
 
             # Final metrics calculation
             latency_ms = (time.perf_counter() - start_time) * 1000
