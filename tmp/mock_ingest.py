@@ -1,9 +1,8 @@
-import asyncio
 import os
 import sys
 
 # Ensure backend modules can be imported
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + '/..'))
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
 
 from backend.ingestion.pipeline import run_ingestion_pipeline
 
@@ -25,7 +24,7 @@ result = run_ingestion_pipeline(
     title="Emergency Fallback Guide",
     user_id=None,
     is_personal=False,
-    progress_callback=lambda p: print(f"Progress: {p}%")
+    progress_callback=lambda p: print(f"Progress: {p}%"),
 )
 
 print(result)

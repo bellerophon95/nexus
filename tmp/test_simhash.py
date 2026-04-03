@@ -1,5 +1,4 @@
 from simhash import Simhash
-import sys
 
 text = "This is a test document for simhash."
 sh = Simhash(text)

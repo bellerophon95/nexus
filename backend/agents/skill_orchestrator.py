@@ -1,11 +1,9 @@
-import asyncio
-import json
 import logging
 import os
-from typing import List, Dict, Any
+from typing import Any
 
 from openai import AsyncOpenAI
-from qdrant_client import QdrantClient, models
+from qdrant_client import QdrantClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +30,14 @@ class SkillOrchestrator:
         self.qdrant_client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
         self.collection_name = "nexus_skills"
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         """Generates a semantic vector for the query."""
         resp = await self.openai_client.embeddings.create(
             input=text, model="text-embedding-3-small"
         )
         return resp.data[0].embedding
 
-    async def get_relevant_skills(self, query: str, top_k: int = 2) -> List[Dict[str, Any]]:
+    async def get_relevant_skills(self, query: str, top_k: int = 2) -> list[dict[str, Any]]:
         """
         Performs high-speed Radial Discovery using semantic vector search.
         Identified skills are injected into the agent's reasoning loop.
@@ -103,7 +101,7 @@ class SkillOrchestrator:
 
         return "\n".join(prompt_parts)
 
-    async def get_skill_by_id(self, skill_id: str) -> Dict[str, Any] | None:
+    async def get_skill_by_id(self, skill_id: str) -> dict[str, Any] | None:
         """Directly retrieves a specific skill's instructions/payload by its unique ID."""
         try:
             # We use name-based UUIDs for stable lookups.
@@ -125,7 +123,7 @@ class SkillOrchestrator:
             logger.error(f"Failed to retrieve skill {skill_id}: {e}")
             return None
 
-    async def fetch_skill_manifests(self) -> List[Dict[str, Any]]:
+    async def fetch_skill_manifests(self) -> list[dict[str, Any]]:
         """Used by the UI to list all available capabilities in the Nexus Skill Hub."""
         try:
             # Scroll through existing skills (up to 100 for now)

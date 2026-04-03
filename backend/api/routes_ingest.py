@@ -33,7 +33,7 @@ def process_ingestion_task(
     """
     try:
         supabase = get_supabase()
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now_iso = datetime.datetime.now(datetime.UTC).isoformat()
         supabase.table("ingestion_tasks").update(
             {
                 "status": "processing",
@@ -104,7 +104,7 @@ def process_ingestion_task(
             # Simple retry loop (max 3 attempts)
             for attempt in range(1, 4):
                 try:
-                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    now_iso = datetime.datetime.now(datetime.UTC).isoformat()
                     supabase.table("ingestion_tasks").update({"updated_at": now_iso}).eq(
                         "id", task_id
                     ).execute()
@@ -247,7 +247,7 @@ async def get_active_tasks(user_id: str = Depends(get_user_id)):
     try:
 
         def fetch_tasks():
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.datetime.now(datetime.UTC)
             one_hour_ago = (now - datetime.timedelta(hours=1)).isoformat()
 
             # Query active or recently failed tasks
@@ -272,9 +272,7 @@ async def get_active_tasks(user_id: str = Depends(get_user_id)):
                 updated_at = datetime.datetime.fromisoformat(
                     task["updated_at"].replace("Z", "+00:00")
                 )
-                if (
-                    datetime.datetime.now(datetime.timezone.utc) - updated_at
-                ).total_seconds() > 1800:
+                if (datetime.datetime.now(datetime.UTC) - updated_at).total_seconds() > 1800:
                     continue
 
             tasks.append(

@@ -1,22 +1,23 @@
 import asyncio
-import sys
 import os
+import sys
 
 # Add root to path
 sys.path.append(os.getcwd())
 
+from backend.config import settings
 from backend.guardrails.input_guard import run_input_guardrails, warmup_guardrails
 from backend.retrieval.generator import generate_title
-from backend.config import settings
+
 
 async def main():
     print("--- Extended Hang Test ---")
     print(f"Environment: {settings.ENV}")
-    
+
     # 1. Warmup
     await warmup_guardrails()
     print("Warmup complete.")
-    
+
     # 2. Guardrails
     print("Running guardrails for 'Hi'...")
     try:
@@ -33,6 +34,7 @@ async def main():
         print(f"Title: {title}")
     except Exception as e:
         print(f"LLM Title Gen FAILED: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -1,7 +1,6 @@
 import datetime
 import logging
 import time
-from typing import Any
 
 from backend.database.supabase import get_supabase
 
@@ -27,7 +26,7 @@ def _reaper_monitor():
     while True:
         try:
             supabase = get_supabase()
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.datetime.now(datetime.UTC)
             threshold = now - datetime.timedelta(minutes=TIMEOUT_MINUTES)
 
             # Query tasks that are stuck in 'processing' or 'pending'
@@ -69,18 +68,14 @@ def _reaper_monitor():
                         supabase.table("ingestion_chunks").update(
                             {
                                 "status": "pending",
-                                "updated_at": datetime.datetime.now(
-                                    datetime.timezone.utc
-                                ).isoformat(),
+                                "updated_at": datetime.datetime.now(datetime.UTC).isoformat(),
                             }
                         ).eq("task_id", task_id).eq("status", "processing").execute()
 
                         # Update task timestamp so we don't recycle it again immediately
                         supabase.table("ingestion_tasks").update(
                             {
-                                "updated_at": datetime.datetime.now(
-                                    datetime.timezone.utc
-                                ).isoformat(),
+                                "updated_at": datetime.datetime.now(datetime.UTC).isoformat(),
                                 "message": "Reaper: Worker crash detected. Recycling chunks for re-pickup...",
                             }
                         ).eq("id", task_id).execute()
@@ -93,9 +88,7 @@ def _reaper_monitor():
                             {
                                 "status": "error",
                                 "message": f"Timed out: Ingestion worker unresponsive for > {TIMEOUT_MINUTES} minutes.",
-                                "updated_at": datetime.datetime.now(
-                                    datetime.timezone.utc
-                                ).isoformat(),
+                                "updated_at": datetime.datetime.now(datetime.UTC).isoformat(),
                             }
                         ).eq("id", task_id).execute()
 

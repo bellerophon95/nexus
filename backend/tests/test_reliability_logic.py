@@ -1,7 +1,9 @@
-import pytest
-from unittest.mock import MagicMock, patch
-import datetime
+import contextlib
 from concurrent.futures import TimeoutError
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from backend.ingestion.worker import _mark_task_error, run_worker_loop
 
 
@@ -38,10 +40,8 @@ def test_worker_timeout_handling(mock_process, mock_executor, mock_get_supabase,
     mock_future.result.side_effect = TimeoutError()
     mock_executor.submit.return_value = mock_future
 
-    try:
+    with contextlib.suppress(InterruptedError):
         run_worker_loop()
-    except InterruptedError:
-        pass
 
     # Verify that nlp_executor.shutdown was called to kill the stuck process
     mock_executor.shutdown.assert_called()

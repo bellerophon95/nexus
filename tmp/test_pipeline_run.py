@@ -1,5 +1,6 @@
-from backend.ingestion.pipeline import run_ingestion_pipeline
 import os
+
+from backend.ingestion.pipeline import run_ingestion_pipeline
 
 # Create a dummy test file
 test_file = "tmp/test_ingestion.txt"

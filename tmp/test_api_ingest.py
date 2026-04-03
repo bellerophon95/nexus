@@ -1,6 +1,7 @@
-import requests
 import os
 import uuid
+
+import requests
 
 url = "http://127.0.0.1:8000/api/ingest"
 file_path = "tmp/test_api_ingestion.txt"
@@ -12,7 +13,9 @@ os.makedirs("tmp", exist_ok=True)
 unique_id = str(uuid.uuid4())
 with open(file_path, "w") as f:
     f.write(f"Project Nexus API Test Document {unique_id}\n")
-    f.write("This document is being processed via the FastAPI route to verify the end-to-end integration.")
+    f.write(
+        "This document is being processed via the FastAPI route to verify the end-to-end integration."
+    )
 
 print(f"Uploading {file_path} to {url}...")
 with open(file_path, "rb") as f:

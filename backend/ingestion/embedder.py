@@ -1,13 +1,13 @@
 import logging
 import re
-import os
 import time
 from collections import Counter
 from typing import Any
 
-from openai import OpenAI, RateLimitError, APIConnectionError, APIStatusError
-from backend.observability.tracing import observe
+from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
+
 from backend.config import settings
+from backend.observability.tracing import observe
 
 logger = logging.getLogger(__name__)
 

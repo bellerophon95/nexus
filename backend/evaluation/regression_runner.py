@@ -116,7 +116,7 @@ async def run_regression(dataset_path: str, thresholds: dict[str, float]):
         else:
             print(
                 "   ✅ Done. Scores: "
-                + ", ".join([f"{k}: {v}" for k, v in res.items() if isinstance(v, (int, float))])
+                + ", ".join([f"{k}: {v}" for k, v in res.items() if isinstance(v, int | float)])
             )
 
     # --- Summary ---

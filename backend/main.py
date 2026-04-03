@@ -85,8 +85,8 @@ async def startup_event():
     asyncio.create_task(warmup_guardrails())
 
     # 2. Start Background Ingestion Worker & Reaper in dedicated threads
-    from backend.ingestion.worker import run_worker_thread
     from backend.ingestion.reaper import run_reaper_loop
+    from backend.ingestion.worker import run_worker_thread
 
     t1 = threading.Thread(target=run_worker_thread, daemon=True)
     t1.start()

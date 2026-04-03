@@ -1,10 +1,10 @@
 import asyncio
 import json
+import logging
 import os
 import re
-import logging
 import uuid
-from typing import List, Dict, Any
+from typing import Any
 
 import openai
 from qdrant_client import QdrantClient, models
@@ -26,7 +26,7 @@ def generate_stable_id(name: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"nexus.skills.{name}"))
 
 
-def parse_md_frontmatter(content: str) -> Dict[str, Any]:
+def parse_md_frontmatter(content: str) -> dict[str, Any]:
     """Simple regex based frontmatter parser."""
     meta = {}
     match = re.search(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
@@ -39,7 +39,7 @@ def parse_md_frontmatter(content: str) -> Dict[str, Any]:
     return meta
 
 
-async def get_embedding(text: str) -> List[float]:
+async def get_embedding(text: str) -> list[float]:
     """Generates embedding using OpenAI."""
     resp = await openai.AsyncOpenAI().embeddings.create(input=text, model="text-embedding-3-small")
     return resp.data[0].embedding
@@ -51,7 +51,7 @@ async def sync_skills():
     # 1. Load from registry.json
     registry_path = "backend/skills/registry.json"
     if os.path.exists(registry_path):
-        with open(registry_path, "r") as f:
+        with open(registry_path) as f:
             registry_data = json.load(f)
             for item in registry_data:
                 skill_id = item["id"]
@@ -75,7 +75,7 @@ async def sync_skills():
             if "SKILL.md" in files:
                 skill_path = os.path.join(root, "SKILL.md")
                 skill_dir_name = os.path.basename(root)
-                with open(skill_path, "r") as f:
+                with open(skill_path) as f:
                     content = f.read()
                     meta = parse_md_frontmatter(content)
                     skills.append(

@@ -2,7 +2,6 @@ import datetime
 import logging
 import time
 from concurrent.futures import ProcessPoolExecutor, TimeoutError
-from functools import partial
 
 from backend.cache.semantic_cache import get_semantic_cache
 from backend.database.supabase import get_supabase
@@ -27,7 +26,7 @@ def _mark_task_error(supabase, task_id: str, message: str):
     Helper to mark a task as error in Supabase.
     """
     try:
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now_iso = datetime.datetime.now(datetime.UTC).isoformat()
         supabase.table("ingestion_tasks").update(
             {"status": "error", "message": message, "updated_at": now_iso}
         ).eq("id", task_id).execute()
@@ -81,8 +80,8 @@ def run_worker_loop():
             from backend.ingestion.pipeline import process_chunks_batch
 
             # Signal activity by updating the task heartbeat before starting models
-            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            for t_id in tasks_to_update.keys():
+            now_iso = datetime.datetime.now(datetime.UTC).isoformat()
+            for t_id in tasks_to_update:
                 supabase.table("ingestion_tasks").update({"updated_at": now_iso}).eq(
                     "id", t_id
                 ).execute()
@@ -110,13 +109,13 @@ def run_worker_loop():
 
             except TimeoutError:
                 logger.error(
-                    f"Worker: NLP batch timed out after 120s. Marking affected tasks as error."
+                    "Worker: NLP batch timed out after 120s. Marking affected tasks as error."
                 )
                 # We can't easily kill the stuck process without restarting the executor
                 if _nlp_executor:
                     _nlp_executor.shutdown(wait=False, cancel_futures=True)
                     _nlp_executor = None
-                for t_id in tasks_to_update.keys():
+                for t_id in tasks_to_update:
                     _mark_task_error(
                         supabase,
                         t_id,
@@ -125,7 +124,7 @@ def run_worker_loop():
                 continue  # Skip to next batch
             except Exception as e:
                 logger.error(f"Worker: NLP Process Pool fatal crash: {e}")
-                for t_id in tasks_to_update.keys():
+                for t_id in tasks_to_update:
                     _mark_task_error(
                         supabase, t_id, f"Core processing engine failed: {str(e)[:200]}"
                     )
