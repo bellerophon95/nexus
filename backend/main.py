@@ -34,6 +34,8 @@ allowed_origins = [
     "http://127.0.0.1:3000",
 ]
 
+from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -42,6 +44,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Trust proxy headers (e.g. X-Forwarded-Proto) from Caddy
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 
 # Custom Middleware (Disabled temporarily to debug streaming hang)
