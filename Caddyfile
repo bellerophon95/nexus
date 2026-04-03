@@ -3,9 +3,6 @@
 }
 
 {$DOMAIN_NAME} {
-    # Frontend (Next.js)
-    reverse_proxy frontend:3000
-
     # Backend (FastAPI) API routes
     handle /api/* {
         reverse_proxy backend:8000 {
@@ -15,6 +12,11 @@
             lb_try_duration 120s
             lb_try_interval 5s
         }
+    }
+
+    # Frontend (Next.js) - everything else
+    handle {
+        reverse_proxy frontend:3000
     }
 
     # Logging
