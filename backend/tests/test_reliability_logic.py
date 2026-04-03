@@ -17,7 +17,7 @@ def test_mark_task_error():
     mock_supabase.table.assert_called_with("ingestion_tasks")
     mock_supabase.table().update.assert_called()
     # Check that update includes status: error and the message
-    args, kwargs = mock_supabase.table().update.call_args
+    args, _ = mock_supabase.table().update.call_args
     assert args[0]["status"] == "error"
     assert args[0]["message"] == message
 
