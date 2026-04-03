@@ -45,7 +45,7 @@ def get_resources():
         except Exception as e:
             logger.error(f"Failed to load spaCy model: {e}")
             raise
-            
+
     if _tokenizer is None:
         try:
             import tiktoken
@@ -118,6 +118,7 @@ def semantic_chunking(
 
         # 3. Embed sentences for THIS segment using OpenAI
         from backend.ingestion.embedder import generate_dense_embeddings_batch
+
         embeddings = generate_dense_embeddings_batch(seg_sentences)
 
         # 4. Semantic Splitting for THIS segment

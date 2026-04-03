@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 #   4. Guard with a timeout (RAGAS calls are slow — ~3-5s)
 
 
-
 def run_ragas_eval_sync(
     query: str, answer: str, contexts: list[str], trace_id: str, ground_truth: str | None = None
 ) -> dict[str, float]:

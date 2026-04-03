@@ -103,14 +103,14 @@ def parse_document(
         logger.info(f"Directly reading text/data file: {file_path}")
         if progress_callback:
             progress_callback(7.0)  # Quick bump
-        
+
         # Use utf-8-sig to handle Census/Excel CSVs with BOM markers, fallback to ignore errors
         with open(file_path, encoding="utf-8-sig", errors="ignore") as f:
             full_text = f.read()
-            
+
         if progress_callback:
             progress_callback(15.0)  # Finished parsing
-            
+
         return ParsedDocument(
             text=full_text,
             tables=[],

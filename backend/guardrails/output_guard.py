@@ -114,15 +114,17 @@ async def run_output_guardrails(
             logger.error(f"PII analysis failed in output: {e}")
 
     # Combine warnings
-    hallucination_score = hallucination_metadata.get("hallucination_score", 0.0) if hallucination_metadata else 0.0
+    hallucination_score = (
+        hallucination_metadata.get("hallucination_score", 0.0) if hallucination_metadata else 0.0
+    )
     if hallucination_metadata:
-        warnings.append(
-            f"Hallucination Risk: {hallucination_score * 100:.0f}%"
-        )
+        warnings.append(f"Hallucination Risk: {hallucination_score * 100:.0f}%")
 
     # Determine overall pass/fail:
     # Fail if hallucination is above threshold (only when context was available)
-    hallucination_blocked = bool(context_chunks) and hallucination_score > HALLUCINATION_BLOCK_THRESHOLD
+    hallucination_blocked = (
+        bool(context_chunks) and hallucination_score > HALLUCINATION_BLOCK_THRESHOLD
+    )
     # Fail if high-severity PII is found in the output
     pii_blocked = bool(HIGH_SEVERITY_PII.intersection(set(pii_types)))
 
@@ -138,7 +140,9 @@ async def run_output_guardrails(
 
     return GuardResult(
         passed=output_passed,
-        sanitized_content=answer if output_passed else "[RESPONSE BLOCKED: Content safety violation.]",
+        sanitized_content=answer
+        if output_passed
+        else "[RESPONSE BLOCKED: Content safety violation.]",
         blocked_reason=blocked_reason,
         pii_detected=pii_types,
         warnings=warnings,

@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 _nlp_executor = None
 
+
 def get_nlp_executor():
     """Lazy loader for the NLP ProcessPoolExecutor to avoid 'spawn' deadlocks."""
     global _nlp_executor
@@ -27,11 +28,9 @@ def _mark_task_error(supabase, task_id: str, message: str):
     """
     try:
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        supabase.table("ingestion_tasks").update({
-            "status": "error",
-            "message": message,
-            "updated_at": now_iso
-        }).eq("id", task_id).execute()
+        supabase.table("ingestion_tasks").update(
+            {"status": "error", "message": message, "updated_at": now_iso}
+        ).eq("id", task_id).execute()
         logger.error(f"Task {task_id} marked as error: {message}")
     except Exception as e:
         logger.error(f"Failed to mark task {task_id} as error: {e}")
@@ -45,7 +44,7 @@ def run_worker_loop():
     global _nlp_executor
     logger.info("Nexus Ingestion Worker: Thread Started.")
     supabase = get_supabase()
-    BATCH_SIZE = 10 
+    BATCH_SIZE = 10
 
     while True:
         try:
@@ -59,7 +58,9 @@ def run_worker_loop():
                 continue
 
             claimed_chunks = rpc_response.data
-            logger.info(f"Worker Heartbeat: Claimed {len(claimed_chunks)} chunks (Processing batch...)")
+            logger.info(
+                f"Worker Heartbeat: Claimed {len(claimed_chunks)} chunks (Processing batch...)"
+            )
 
             # 2. Prepare for batch processing
             # We group by task_id to handle multiple documents arriving at once
@@ -82,7 +83,9 @@ def run_worker_loop():
             # Signal activity by updating the task heartbeat before starting models
             now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
             for t_id in tasks_to_update.keys():
-                supabase.table("ingestion_tasks").update({"updated_at": now_iso}).eq("id", t_id).execute()
+                supabase.table("ingestion_tasks").update({"updated_at": now_iso}).eq(
+                    "id", t_id
+                ).execute()
 
             logger.info("Worker: Handoff batch to NLP Process Pool...")
             try:
@@ -95,27 +98,37 @@ def run_worker_loop():
                     processed_results = future.result(timeout=120)  # 2 minute timeout per batch
                     logger.info("Worker: NLP Process Pool completed successfully.")
                 except (RuntimeError, BrokenPipeError):
-                    logger.warning("Worker: NLP Executor crashed or broken. Recreating and retrying once...")
+                    logger.warning(
+                        "Worker: NLP Executor crashed or broken. Recreating and retrying once..."
+                    )
                     if _nlp_executor:
                         _nlp_executor.shutdown(wait=False, cancel_futures=True)
                         _nlp_executor = None
                     executor = get_nlp_executor()
                     future = executor.submit(process_chunks_batch, all_chunk_payloads)
                     processed_results = future.result(timeout=120)
-                
+
             except TimeoutError:
-                logger.error(f"Worker: NLP batch timed out after 120s. Marking affected tasks as error.")
+                logger.error(
+                    f"Worker: NLP batch timed out after 120s. Marking affected tasks as error."
+                )
                 # We can't easily kill the stuck process without restarting the executor
                 if _nlp_executor:
                     _nlp_executor.shutdown(wait=False, cancel_futures=True)
                     _nlp_executor = None
                 for t_id in tasks_to_update.keys():
-                    _mark_task_error(supabase, t_id, "Inference engine timed out (120s). Resource exhaustion or complex document structure.")
-                continue # Skip to next batch
+                    _mark_task_error(
+                        supabase,
+                        t_id,
+                        "Inference engine timed out (120s). Resource exhaustion or complex document structure.",
+                    )
+                continue  # Skip to next batch
             except Exception as e:
                 logger.error(f"Worker: NLP Process Pool fatal crash: {e}")
                 for t_id in tasks_to_update.keys():
-                    _mark_task_error(supabase, t_id, f"Core processing engine failed: {str(e)[:200]}")
+                    _mark_task_error(
+                        supabase, t_id, f"Core processing engine failed: {str(e)[:200]}"
+                    )
                 continue
 
             # Map processed results back to original chunks
@@ -227,12 +240,16 @@ def run_worker_loop():
                             supabase.table("ingestion_tasks").update(update_data).eq(
                                 "id", task_id
                             ).execute()
-                            logger.info(f"Worker Progress: {update_data['progress']:.1f}% for task {task_id}")
+                            logger.info(
+                                f"Worker Progress: {update_data['progress']:.1f}% for task {task_id}"
+                            )
                             break
                         except Exception as inner_e:
                             if attempt == 3:
                                 raise inner_e
-                            logger.warning(f"Task update attempt {attempt} failed: {inner_e}. Retrying...")
+                            logger.warning(
+                                f"Task update attempt {attempt} failed: {inner_e}. Retrying..."
+                            )
                             time.sleep(1)
 
                 except Exception as e:

@@ -28,9 +28,7 @@ async def list_tasks_endpoint(user_id: str = Depends(get_user_id)):
         return response.data
     except Exception as e:
         logger.error(f"Error listing tasks in routes_tasks: {e}")
-        raise HTTPException(
-            status_code=500, detail="Internal server error while listing tasks"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error while listing tasks")
 
 
 @router.get("/{task_id}")

@@ -39,7 +39,7 @@ def process_ingestion_task(
                 "status": "processing",
                 "progress": 5.0,
                 "message": "Analyzing document structure...",
-                "updated_at": now_iso
+                "updated_at": now_iso,
             }
         ).eq("id", task_id).execute()
 
@@ -64,7 +64,9 @@ def process_ingestion_task(
         total_chunks = len(chunks)
 
         if total_chunks == 0:
-            logger.warning(f"No chunks generated for {filename} (Task: {task_id}). Marking as error.")
+            logger.warning(
+                f"No chunks generated for {filename} (Task: {task_id}). Marking as error."
+            )
             supabase.table("ingestion_tasks").update(
                 {"status": "error", "message": "Document contains no readable text or is empty."}
             ).eq("id", task_id).execute()
@@ -103,7 +105,9 @@ def process_ingestion_task(
             for attempt in range(1, 4):
                 try:
                     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                    supabase.table("ingestion_tasks").update({"updated_at": now_iso}).eq("id", task_id).execute()
+                    supabase.table("ingestion_tasks").update({"updated_at": now_iso}).eq(
+                        "id", task_id
+                    ).execute()
                     supabase.table("ingestion_chunks").insert(batch).execute()
                     break
                 except Exception as e:
@@ -241,10 +245,11 @@ async def get_active_tasks(user_id: str = Depends(get_user_id)):
     'error' tasks are only returned if updated within the last hour.
     """
     try:
+
         def fetch_tasks():
             now = datetime.datetime.now(datetime.timezone.utc)
             one_hour_ago = (now - datetime.timedelta(hours=1)).isoformat()
-            
+
             # Query active or recently failed tasks
             return (
                 get_supabase()
@@ -258,26 +263,34 @@ async def get_active_tasks(user_id: str = Depends(get_user_id)):
             )
 
         response = await asyncio.to_thread(fetch_tasks)
-        
+
         tasks = []
         for task in response.data:
             # For error tasks, double check the age
             if task["status"] == "error":
                 # Only show errors from the last 30 minutes in the active list
-                updated_at = datetime.datetime.fromisoformat(task["updated_at"].replace("Z", "+00:00"))
-                if (datetime.datetime.now(datetime.timezone.utc) - updated_at).total_seconds() > 1800:
+                updated_at = datetime.datetime.fromisoformat(
+                    task["updated_at"].replace("Z", "+00:00")
+                )
+                if (
+                    datetime.datetime.now(datetime.timezone.utc) - updated_at
+                ).total_seconds() > 1800:
                     continue
-            
-            tasks.append({
-                "id": str(task["id"]),
-                "status": task["status"],
-                "progress": float(task.get("progress", 0)),
-                "message": task.get("message", ""),
-                "filename": task.get("filename", "Unknown Source"),
-                "document_id": str(task.get("document_id")) if task.get("document_id") else None,
-                "created_at": task["created_at"],
-            })
-            
+
+            tasks.append(
+                {
+                    "id": str(task["id"]),
+                    "status": task["status"],
+                    "progress": float(task.get("progress", 0)),
+                    "message": task.get("message", ""),
+                    "filename": task.get("filename", "Unknown Source"),
+                    "document_id": str(task.get("document_id"))
+                    if task.get("document_id")
+                    else None,
+                    "created_at": task["created_at"],
+                }
+            )
+
         return tasks
     except Exception as e:
         logger.error(f"Failed to fetch active tasks: {e}")

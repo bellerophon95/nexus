@@ -20,29 +20,30 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
+
 def generate_stable_id(name: str) -> str:
     """Generates a deterministic UUID based on a string name."""
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"nexus.skills.{name}"))
 
+
 def parse_md_frontmatter(content: str) -> Dict[str, Any]:
     """Simple regex based frontmatter parser."""
     meta = {}
-    match = re.search(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
+    match = re.search(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
     if match:
         fm_content = match.group(1)
-        for line in fm_content.split('\n'):
-            if ':' in line:
-                key, val = line.split(':', 1)
+        for line in fm_content.split("\n"):
+            if ":" in line:
+                key, val = line.split(":", 1)
                 meta[key.strip()] = val.strip()
     return meta
 
+
 async def get_embedding(text: str) -> List[float]:
     """Generates embedding using OpenAI."""
-    resp = await openai.AsyncOpenAI().embeddings.create(
-        input=text,
-        model="text-embedding-3-small"
-    )
+    resp = await openai.AsyncOpenAI().embeddings.create(input=text, model="text-embedding-3-small")
     return resp.data[0].embedding
+
 
 async def sync_skills():
     skills = []
@@ -55,15 +56,17 @@ async def sync_skills():
             for item in registry_data:
                 skill_id = item["id"]
                 meta = item.get("metadata", {})
-                skills.append({
-                    "id": skill_id,
-                    "name": meta.get("name", skill_id),
-                    "description": meta.get("description", ""),
-                    "role": meta.get("role", "Expert"),
-                    "expertise": meta.get("expertise", []),
-                    "content": meta.get("content", ""),
-                    "source": "registry"
-                })
+                skills.append(
+                    {
+                        "id": skill_id,
+                        "name": meta.get("name", skill_id),
+                        "description": meta.get("description", ""),
+                        "role": meta.get("role", "Expert"),
+                        "expertise": meta.get("expertise", []),
+                        "content": meta.get("content", ""),
+                        "source": "registry",
+                    }
+                )
 
     # 2. Scan _agents/skills for new skills
     agents_skills_dir = "_agents/skills"
@@ -75,45 +78,50 @@ async def sync_skills():
                 with open(skill_path, "r") as f:
                     content = f.read()
                     meta = parse_md_frontmatter(content)
-                    skills.append({
-                        "id": f"agent_{skill_dir_name}",
-                        "name": meta.get("name", skill_dir_name),
-                        "description": meta.get("description", ""),
-                        "role": meta.get("role", "Process Expert"),
-                        "expertise": meta.get("expertise", ["Standardized Procedure"]),
-                        "content": content,
-                        "source": "agent_directory"
-                    })
+                    skills.append(
+                        {
+                            "id": f"agent_{skill_dir_name}",
+                            "name": meta.get("name", skill_dir_name),
+                            "description": meta.get("description", ""),
+                            "role": meta.get("role", "Process Expert"),
+                            "expertise": meta.get("expertise", ["Standardized Procedure"]),
+                            "content": content,
+                            "source": "agent_directory",
+                        }
+                    )
 
     # Deduplicate skills by ID
     unique_skills = []
     seen_ids = set()
     for skill in skills:
-        if skill['id'] not in seen_ids:
+        if skill["id"] not in seen_ids:
             unique_skills.append(skill)
-            seen_ids.add(skill['id'])
-    
+            seen_ids.add(skill["id"])
+
     skills = unique_skills
     logger.info(f"Indexing {len(skills)} skills into Qdrant with stable IDs...")
 
     points = []
     for skill in skills:
-        embed_text = f"Skill: {skill['name']}\nRole: {skill['role']}\nDescription: {skill['description']}"
+        embed_text = (
+            f"Skill: {skill['name']}\nRole: {skill['role']}\nDescription: {skill['description']}"
+        )
         embedding = await get_embedding(embed_text)
 
-        points.append(models.PointStruct(
-            id=generate_stable_id(skill['id']), # Stable UUID
-            vector=embedding,
-            payload=skill
-        ))
+        points.append(
+            models.PointStruct(
+                id=generate_stable_id(skill["id"]),  # Stable UUID
+                vector=embedding,
+                payload=skill,
+            )
+        )
 
-    client.upsert(
-        collection_name="nexus_skills",
-        points=points
-    )
+    client.upsert(collection_name="nexus_skills", points=points)
     logger.info("Sync complete. nexus_skills updated with stable IDs.")
+
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv("backend/.env")
     asyncio.run(sync_skills())

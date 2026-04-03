@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Cache for the OpenAI client
 _client = None
 
+
 def get_client():
     """Lazy loader for the OpenAI client."""
     global _client
@@ -47,17 +48,15 @@ def generate_dense_embedding(text: str, dimensions: int = 384) -> list[float]:
     for attempt in range(max_retries):
         try:
             response = client.embeddings.create(
-                input=text,
-                model="text-embedding-3-small",
-                dimensions=dimensions
+                input=text, model="text-embedding-3-small", dimensions=dimensions
             )
             return response.data[0].embedding
         except (RateLimitError, APIConnectionError, APIStatusError) as e:
             if attempt == max_retries - 1:
                 logger.error(f"OpenAI embedding failed after {max_retries} attempts: {e}")
                 raise
-            delay = base_delay * (2 ** attempt)
-            logger.warning(f"OpenAI error (attempt {attempt+1}): {e}. Retrying in {delay}s...")
+            delay = base_delay * (2**attempt)
+            logger.warning(f"OpenAI error (attempt {attempt + 1}): {e}. Retrying in {delay}s...")
             time.sleep(delay)
         except Exception as e:
             logger.error(f"Unexpected error in generate_dense_embedding: {e}")
@@ -81,9 +80,7 @@ def generate_dense_embeddings_batch(texts: list[str], dimensions: int = 384) -> 
         try:
             # Note: OpenAI allows up to 2048 elements in a single batch
             response = client.embeddings.create(
-                input=texts,
-                model="text-embedding-3-small",
-                dimensions=dimensions
+                input=texts, model="text-embedding-3-small", dimensions=dimensions
             )
             # OpenAI response.data is guaranteed to be in the same order as input
             sorted_data = sorted(response.data, key=lambda x: x.index)
@@ -92,8 +89,10 @@ def generate_dense_embeddings_batch(texts: list[str], dimensions: int = 384) -> 
             if attempt == max_retries - 1:
                 logger.error(f"OpenAI batch embedding failed after {max_retries} attempts: {e}")
                 raise
-            delay = base_delay * (2 ** attempt)
-            logger.warning(f"OpenAI batch error (attempt {attempt+1}): {e}. Retrying in {delay}s...")
+            delay = base_delay * (2**attempt)
+            logger.warning(
+                f"OpenAI batch error (attempt {attempt + 1}): {e}. Retrying in {delay}s..."
+            )
             time.sleep(delay)
         except Exception as e:
             logger.error(f"Unexpected error in OpenAI batch execution: {e}")

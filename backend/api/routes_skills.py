@@ -23,14 +23,14 @@ def get_orchestrator():
 async def get_skills_index(orchestrator: SkillOrchestrator = Depends(get_orchestrator)):
     """Returns the full index of available skills and pre-configured bundles from Qdrant."""
     skills = await orchestrator.fetch_skill_manifests()
-    
+
     # Define strategic bundles for the UI
     bundles = {
         "Deep Research": ["researcher", "financial_analyst"],
         "Production Readiness": ["agent_code_quality", "researcher"],
-        "Financial Expert": ["financial_analyst"]
+        "Financial Expert": ["financial_analyst"],
     }
-    
+
     return {
         "skills": skills,
         "bundles": bundles,
@@ -54,10 +54,12 @@ async def get_skill_content(
     """Fetches the actual instruction set (payload) for a given skill ID from Qdrant."""
     skill = await orchestrator.get_skill_by_id(skill_id)
     if not skill or "content" not in skill:
-        raise HTTPException(status_code=404, detail=f"Skill '{skill_id}' content not found in vector index")
-    
+        raise HTTPException(
+            status_code=404, detail=f"Skill '{skill_id}' content not found in vector index"
+        )
+
     return {
-        "skill_id": skill_id, 
+        "skill_id": skill_id,
         "content": skill["content"],
-        "meta": {k: v for k, v in skill.items() if k != "content"}
+        "meta": {k: v for k, v in skill.items() if k != "content"},
     }

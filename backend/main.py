@@ -87,14 +87,16 @@ async def startup_event():
     # 2. Start Background Ingestion Worker & Reaper in dedicated threads
     from backend.ingestion.worker import run_worker_thread
     from backend.ingestion.reaper import run_reaper_loop
-    
+
     t1 = threading.Thread(target=run_worker_thread, daemon=True)
     t1.start()
-    
+
     t2 = threading.Thread(target=run_reaper_loop, daemon=True)
     t2.start()
 
-    logger.info(f"Nexus Backend started in {settings.ENV} mode (Dedicated Ingestion Worker & Reaper Threads)")
+    logger.info(
+        f"Nexus Backend started in {settings.ENV} mode (Dedicated Ingestion Worker & Reaper Threads)"
+    )
 
 
 @app.on_event("shutdown")
@@ -102,6 +104,7 @@ async def shutdown_event():
     print(f"Shutting down {settings.APP_NAME}")
     # Clean shutdown of the NLP executor
     from backend.ingestion.worker import get_nlp_executor
+
     executor = get_nlp_executor()
     executor.shutdown(wait=False, cancel_futures=True)
     logger.info("NLP Process Pool shut down.")

@@ -59,10 +59,11 @@ def delete_document(document_id: str):
             logger.info(f"Successfully deleted Qdrant chunks for document: {document_id}")
         except Exception as qe:
             logger.error(f"Failed to delete Qdrant chunks for document {document_id}: {qe}")
-            
+
         # Invalidate Semantic Cache
         try:
             from backend.cache.semantic_cache import get_semantic_cache
+
             get_semantic_cache().invalidate_for_documents([document_id])
             logger.info(f"Invalidated semantic cache for document: {document_id}")
         except Exception as ce:

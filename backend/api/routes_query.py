@@ -265,11 +265,13 @@ async def query_streaming(
             # Wait for both with a reasonable timeout to prevent UI "hang"
             # If evaluation takes too long, we'll continue with partial data
             try:
+
                 async def run_evals():
                     return await asyncio.gather(
                         asyncio.wait_for(judge_task, timeout=4.0),
                         asyncio.wait_for(output_guard_task, timeout=4.0),
                     )
+
                 eval_task = asyncio.create_task(run_evals())
 
                 while not eval_task.done():
@@ -312,9 +314,7 @@ async def query_streaming(
 
             raw_relevance = judge_results.get("relevance")  # None if judge failed/timed out
             relevance_score = (
-                max(0.0, min(1.0, (raw_relevance - 1) / 4.0))
-                if raw_relevance is not None
-                else None
+                max(0.0, min(1.0, (raw_relevance - 1) / 4.0)) if raw_relevance is not None else None
             )
 
             # 6. Final Guardrail State
@@ -323,7 +323,9 @@ async def query_streaming(
             if not guard_result.passed:
                 guardrail_display_status = "failed"
             elif output_guard is not None and not getattr(output_guard, "passed", True):
-                logger.warning(f"Output blocked by guardrails: {getattr(output_guard, 'blocked_reason', 'Unknown')}")
+                logger.warning(
+                    f"Output blocked by guardrails: {getattr(output_guard, 'blocked_reason', 'Unknown')}"
+                )
                 full_answer = output_guard.sanitized_content
                 guardrail_display_status = "failed"
             elif output_guard is not None and getattr(output_guard, "warnings", []):

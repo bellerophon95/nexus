@@ -18,19 +18,24 @@ class SkillOrchestrator:
 
     def __init__(self, api_key: str):
         self.openai_client = AsyncOpenAI(api_key=api_key)
-        
+
         # Load Qdrant credentials from environment
-        qdrant_url = os.environ.get("QDRANT_URL", "https://8d7a6e9f-b393-4cf1-9138-d041cff24fe4.us-west-1-0.aws.cloud.qdrant.io:6333")
-        qdrant_api_key = os.environ.get("QDRANT_API_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIiwic3ViamVjdCI6ImFwaS1rZXk6ZDE5ZTI3NGEtOGI5NC00ZjY4LThjYWYtMmVkZTdiZmY1MDk3In0.92EUv4QVebX6-qjc_7VnIe7G_MahexsbDyUa9W5eheE")
-        
+        qdrant_url = os.environ.get(
+            "QDRANT_URL",
+            "https://8d7a6e9f-b393-4cf1-9138-d041cff24fe4.us-west-1-0.aws.cloud.qdrant.io:6333",
+        )
+        qdrant_api_key = os.environ.get(
+            "QDRANT_API_KEY",
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIiwic3ViamVjdCI6ImFwaS1rZXk6ZDE5ZTI3NGEtOGI5NC00ZjY4LThjYWYtMmVkZTdiZmY1MDk3In0.92EUv4QVebX6-qjc_7VnIe7G_MahexsbDyUa9W5eheE",
+        )
+
         self.qdrant_client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
         self.collection_name = "nexus_skills"
 
     async def get_embedding(self, text: str) -> List[float]:
         """Generates a semantic vector for the query."""
         resp = await self.openai_client.embeddings.create(
-            input=text,
-            model="text-embedding-3-small"
+            input=text, model="text-embedding-3-small"
         )
         return resp.data[0].embedding
 
@@ -41,24 +46,26 @@ class SkillOrchestrator:
         """
         try:
             query_vector = await self.get_embedding(query)
-            
+
             # Search Qdrant for semantically similar skill roles/descriptions
             search_result = self.qdrant_client.query_points(
                 collection_name=self.collection_name,
                 query=query_vector,
                 limit=top_k,
-                score_threshold=0.35 # Ensure relevance
+                score_threshold=0.35,  # Ensure relevance
             ).points
-            
+
             relevant_skills = []
             for hit in search_result:
                 skill_data = hit.payload
                 skill_data["match_score"] = hit.score
                 relevant_skills.append(skill_data)
-                
+
             if relevant_skills:
-                logger.info(f"Radial Discovery matched {len(relevant_skills)} experts for: '{query[:50]}...'")
-                
+                logger.info(
+                    f"Radial Discovery matched {len(relevant_skills)} experts for: '{query[:50]}...'"
+                )
+
             return relevant_skills
 
         except Exception as e:
@@ -75,7 +82,9 @@ class SkillOrchestrator:
             return ""
 
         prompt_parts = ["\n### ⚡ NEXUS EXPERT ORCHESTRATION: RADIAL DISCOVERY ACTIVE\n"]
-        prompt_parts.append("CRITICAL OVERRIDE: The following specialized expert roles have been dynamically injected based on the user's intent. YOU MUST BEGIN your response by introducing yourself as this expert persona. YOU MUST COMPLETELY ADOPT THEIR PERSONA, TONE, AND EXPERTISE. Do NOT drop character. You are no longer a general assistant—you are exactly this expert.\n")
+        prompt_parts.append(
+            "CRITICAL OVERRIDE: The following specialized expert roles have been dynamically injected based on the user's intent. YOU MUST BEGIN your response by introducing yourself as this expert persona. YOU MUST COMPLETELY ADOPT THEIR PERSONA, TONE, AND EXPERTISE. Do NOT drop character. You are no longer a general assistant—you are exactly this expert.\n"
+        )
 
         for skill in relevant_skills:
             role = skill.get("role", "Expert Consultant")
@@ -88,7 +97,7 @@ class SkillOrchestrator:
                 f"**Technical Expertise**: {expertise}" if expertise else "",
                 "**Expert Instructions**:",
                 content,
-                "\n---"
+                "\n---",
             ]
             prompt_parts.append("\n".join([p for p in parts if p]))
 
@@ -99,15 +108,16 @@ class SkillOrchestrator:
         try:
             # We use name-based UUIDs for stable lookups.
             import uuid
+
             point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"nexus.skills.{skill_id}"))
-            
+
             result = self.qdrant_client.retrieve(
                 collection_name=self.collection_name,
                 ids=[point_id],
                 with_payload=True,
-                with_vectors=False
+                with_vectors=False,
             )
-            
+
             if result:
                 return result[0].payload
             return None
@@ -123,10 +133,9 @@ class SkillOrchestrator:
                 collection_name=self.collection_name,
                 limit=100,
                 with_payload=True,
-                with_vectors=False
+                with_vectors=False,
             )
             return [p.payload for p in points]
         except Exception as e:
             logger.error(f"Failed to fetch skill manifests for UI: {e}")
             return []
-
