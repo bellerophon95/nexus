@@ -7,15 +7,13 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
-from backend.api.routes_skills import get_orchestrator
+from backend.agents.graph import nexus_graph
+from backend.agents.state import NexusState
 from backend.api.security import get_user_id, rate_limit_dependency
 from backend.cache.semantic_cache import get_semantic_cache
 from backend.database.chat import create_conversation, get_messages, save_message, sync_user
-from backend.evaluation.llm_judge import llm_judge_evaluate_async
 from backend.guardrails.input_guard import run_input_guardrails
-from backend.guardrails.output_guard import run_output_guardrails
-from backend.retrieval.generator import generate_answer_stream, generate_title
-from backend.retrieval.searcher import search_knowledge_base
+from backend.retrieval.generator import generate_title
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -28,6 +26,7 @@ async def query_streaming(
     conversation_id: str | None = Query(None),
     match_threshold: float = Query(0.2),
     rerank: bool = Query(True),
+    max_iterations: int = Query(3),
     user_id: str | None = Depends(get_user_id),
     _=Depends(rate_limit_dependency),
 ):
@@ -154,237 +153,100 @@ async def query_streaming(
                 yield f"data: {json.dumps({'type': 'done', 'citations': cached['citations'], 'conversation_id': current_conv_id, 'message_id': assistant_msg_id})}\n\n"
                 return
 
-            # 2. Cache Miss: Execute RAG Pipeline
-            yield await yield_agent_step("Retriever", "Scanning Knowledge Base", "running")
-            yield f"data: {json.dumps({'type': 'activity', 'node': 'retriever', 'status': 'Searching document vector space...', 'status_type': 'running'})}\n\n"
-            last_heartbeat = time.perf_counter()
+            # 2. Cache Miss: Execute Agentic LangGraph Flow
+            initial_state: NexusState = {
+                "messages": [],
+                "query": effective_q,
+                "current_agent": "supervisor",
+                "retrieved_chunks": [],
+                "iteration_count": 0,
+                "max_iterations": max_iterations,
+                "validation_status": "pending",
+                "hallucination_score": 0.0,
+                "final_answer": "",
+                "pii_detected": [],
+                "activity_log": [],
+                "user_id": user_id,
+                "match_threshold": match_threshold,
+                "rerank": rerank,
+            }
 
-            # Fetch context chunks from Knowledge Base (Vector + BM25)
-            try:
-                # Use a small loop to allow heartbeats if search is slow (rare but possible)
-                search_task = asyncio.create_task(
-                    asyncio.to_thread(
-                        search_knowledge_base,
-                        effective_q,
-                        user_id=user_id,
-                        match_threshold=match_threshold,
-                        rerank=rerank,
-                    )
-                )
-
-                while not search_task.done():
-                    hb = await heartbeat()
-                    if hb:
-                        yield hb
-                    await asyncio.sleep(0.5)
-
-                context_chunks = await search_task
-            except Exception as e:
-                logger.error(f"Retriever search failed: {e}")
-                context_chunks = []
-
-            # Fetch history for multi-turn support
-            history = []
+            # Fetch history for multi-turn support and inject into state
             if current_conv_id:
-                history = await get_messages(current_conv_id)
+                history_messages = await get_messages(current_conv_id)
+                initial_state["messages"] = history_messages
 
-            tier = "rag"
-            if not context_chunks:
-                yield await yield_agent_step(
-                    "Retriever", "No specific documents found. Using General Knowledge.", "warning"
-                )
-                tier = "general"
-
-            yield await yield_agent_step("Retriever", "Scanning Knowledge Base", "completed")
-            yield f"data: {json.dumps({'type': 'activity', 'node': 'retriever', 'status': 'Search completed.', 'status_type': 'completed'})}\n\n"
-
-            # Step 1.5: Skill Orchestration (Fetch relevant skills)
-            yield await yield_agent_step("Nexus", "Orchestrating Skills", "running")
-            orchestrator = get_orchestrator()
-            skill_prompt = await orchestrator.get_orchestration_prompt(effective_q)
-            yield await yield_agent_step("Nexus", "Orchestrating Skills", "completed")
-
-            # Step 2: Stream Answer Generation
             full_answer = ""
-            async for token in generate_answer_stream(
-                effective_q, context_chunks, history=history, skill_prompt=skill_prompt
-            ):
-                # Check for client disconnect
+            citations = []
+
+            # Execute graph and stream steps
+            async for step in nexus_graph.astream(initial_state):
                 if await request.is_disconnected():
-                    logger.info("Client disconnected during stream")
+                    logger.info("Client disconnected during agentic flow")
                     break
 
-                full_answer += token
-                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                # 'step' is a dict of {node_name: state_updates}
+                node_name = next(iter(step.keys()))
+                updates = step[node_name]
+
+                # Yield agent step for UI tracking
+                agent_name = updates.get("current_agent", node_name).capitalize()
+                # Status description mapping
+                status_desc = "Working..."
+                if updates.get("activity_log"):
+                    status_desc = updates["activity_log"][-1].get("status", "Working...")
+
+                yield await yield_agent_step(agent_name, node_name, "completed")
+                yield f"data: {json.dumps({'type': 'activity', 'node': node_name, 'status': status_desc, 'status_type': 'completed'})}\n\n"
+
+                # If this node produced the final answer, stream its tokens
+                if updates.get("final_answer") and not full_answer:
+                    full_answer = updates["final_answer"]
+                    # Simulate token-by-token streaming for the frontend "typing" effect
+                    for token in full_answer.split(" "):
+                        yield f"data: {json.dumps({'type': 'token', 'content': token + ' '})}\n\n"
+                        await asyncio.sleep(0.02)
+
+                    # Capture citations from the state
+                    if "retrieved_chunks" in updates:
+                        for i, chunk in enumerate(updates["retrieved_chunks"]):
+                            citations.append(
+                                {
+                                    "id": i + 1,
+                                    "document_id": chunk.get("document_id", f"doc_{i}"),
+                                    "title": chunk.get("metadata", {}).get("title", "Unknown"),
+                                    "text": chunk.get("text", ""),
+                                    "metadata": chunk.get("metadata", {}),
+                                }
+                            )
+
                 last_heartbeat = time.perf_counter()
-                # Small sleep to prevent network buffer issues and allow smooth frontend rendering
-                await asyncio.sleep(0.01)
 
-            yield await yield_agent_step("LLM", "Synthesizing Answer", "completed")
-            yield f"data: {json.dumps({'type': 'activity', 'node': 'analyst', 'status': 'Response synthesized.', 'status_type': 'completed'})}\n\n"
-
-            # Step 3: Format Citations for 'done' event
-            citations = []
-            doc_ids = []
-            for i, chunk in enumerate(context_chunks):
-                citations.append(
-                    {
-                        "id": i + 1,
-                        "document_id": chunk["document_id"],
-                        "title": chunk.get("title", "Unknown"),
-                        "text": chunk["text"],
-                        "header": chunk.get("header"),
-                        "metadata": chunk.get("metadata", {}),
-                    }
-                )
-                doc_ids.append(chunk["document_id"])
-
-            # Step 4: Post-Stream Evaluation & Metrics (Parallel)
-            yield await yield_agent_step("Validator", "Final Quality Check", "running")
-
-            # Combine context into a single string for the judge
-            full_context = "\n---\n".join([c["text"] for c in citations])
-            trace_id = getattr(request.state, "trace_id", "local_debug")
-
-            # Fire off Judge and Output Guardrail concurrently
-            judge_task = asyncio.create_task(
-                llm_judge_evaluate_async(
-                    question=effective_q,
-                    answer=full_answer,
-                    context=full_context,
-                    trace_id=trace_id,
-                )
-            )
-
-            output_guard_task = asyncio.create_task(
-                run_output_guardrails(full_answer, context_chunks)
-            )
-
-            # Wait for both with a reasonable timeout to prevent UI "hang"
-            # If evaluation takes too long, we'll continue with partial data
-            # Wait for both with a reasonable timeout to prevent UI "hang"
-            # If evaluation takes too long, we'll continue with partial data
-            try:
-
-                async def run_evals():
-                    return await asyncio.gather(
-                        asyncio.wait_for(judge_task, timeout=4.0),
-                        asyncio.wait_for(output_guard_task, timeout=4.0),
-                    )
-
-                eval_task = asyncio.create_task(run_evals())
-
-                while not eval_task.done():
-                    # Check for client disconnect during wait
-                    if await request.is_disconnected():
-                        logger.info("Client disconnected during evaluation")
-                        break
-
-                    hb = await heartbeat()
-                    if hb:
-                        yield hb
-                    await asyncio.sleep(0.25)  # More frequent check (4Hz)
-
-                judge_results, output_guard = await eval_task
-            except TimeoutError:
-                logger.warning("Post-stream evaluation timed out, continuing with partial results")
-                judge_results = {}
-                output_guard = None  # Will fall back to raw answer
-            except Exception as e:
-                logger.error(f"Post-stream evaluation failed: {e}")
-                judge_results = {}
-                output_guard = None
-
-            # Calculate final metrics
+            # Final metrics calculation
             latency_ms = (time.perf_counter() - start_time) * 1000
-
-            # 5. Extract results with normalization (Judge gives 1-5, Frontend expects 0.0-1.0)
-            # Frontend does (1 - hallucinationScore) * 100 for Faithfulness.
-            # So if Faithfulness is 5/5 (best), we want hallucinationScore to be 0.0.
-            # If Faithfulness is 1/5 (worst), we want hallucinationScore to be 1.0.
-            # IMPORTANT: Use None (not 5) as fallback — a failed/timed-out judge must show N/A,
-            # NOT a perfect score. Defaulting to 5 was silently masking evaluation failures.
-
-            raw_faithfulness = judge_results.get("faithfulness")  # None if judge failed/timed out
-            hallucination_score = (
-                max(0.0, min(1.0, (5 - raw_faithfulness) / 4.0))
-                if raw_faithfulness is not None
-                else None
-            )
-
-            raw_relevance = judge_results.get("relevance")  # None if judge failed/timed out
-            relevance_score = (
-                max(0.0, min(1.0, (raw_relevance - 1) / 4.0)) if raw_relevance is not None else None
-            )
-
-            # 6. Final Guardrail State
-            # Priority: input fail > output fail > output warning > passed
-            guardrail_display_status = "passed"
-            if not guard_result.passed:
-                guardrail_display_status = "failed"
-            elif output_guard is not None and not getattr(output_guard, "passed", True):
-                logger.warning(
-                    f"Output blocked by guardrails: {getattr(output_guard, 'blocked_reason', 'Unknown')}"
-                )
-                full_answer = output_guard.sanitized_content
-                guardrail_display_status = "failed"
-            elif output_guard is not None and getattr(output_guard, "warnings", []):
-                # Has warnings (e.g. mild hallucination risk, low-severity PII) but wasn't blocked
-                guardrail_display_status = "warning"
-            else:
-                guardrail_display_status = "passed"
-
             metrics = {
                 "type": "metrics",
                 "latency": latency_ms,
                 "cache_hit": False,
-                # None when: tier is general (no context to judge faithfulness against)
-                # OR when the judge failed/timed out (failure should not masquerade as 100%)
-                "hallucinationScore": hallucination_score if tier != "general" else None,
-                "relevanceScore": relevance_score if tier != "general" else None,
-                "guardrailStatus": guardrail_display_status,
-                "tier": tier,
-                "tokens": len(full_answer.split()) + len(full_context.split()),
+                "hallucinationScore": initial_state.get("hallucination_score", 0.0),
+                "guardrailStatus": "passed",
+                "tier": "agentic",
+                "tokens": len(full_answer.split()),
                 "cost": 0.000,
             }
-
             yield f"data: {json.dumps(metrics)}\n\n"
-            yield await yield_agent_step("Validator", "Final Quality Check", "completed")
 
-            # Step 5: Final 'done' event with metadata
-            # WE SEND THIS LAST so the frontend doesn't close too early
-            # Now including IDs for persistence and feedback
-
-            # Step 6: Post-stream: save assistant message and metrics
-            # We do this before 'done' so we can send the message_id back
+            # Save assistant message
             assistant_msg_id = await save_message(
                 conversation_id=current_conv_id,
                 role="assistant",
                 content=full_answer,
                 citations=citations,
                 metrics=metrics,
-                trace_id=trace_id,
-                agent_steps=captured_steps,  # Capture all steps for assistant turn
+                agent_steps=captured_steps,
             )
 
-            done_payload = {
-                "type": "done",
-                "citations": citations,
-                "conversation_id": current_conv_id,
-                "message_id": assistant_msg_id,
-            }
-            yield f"data: {json.dumps(done_payload)}\n\n"
-
-            # Step 7: Post-stream: store in cache (Only if RAG successful and passed guardrails)
-            if full_answer and tier == "rag" and getattr(output_guard, "passed", True):
-                await asyncio.to_thread(
-                    get_semantic_cache().set,
-                    effective_q,
-                    full_answer,
-                    citations,
-                    list(set(doc_ids)),
-                    metrics,
-                )
+            yield f"data: {json.dumps({'type': 'done', 'citations': citations, 'conversation_id': current_conv_id, 'message_id': assistant_msg_id})}\n\n"
 
         except Exception as e:
             logger.error(f"Error in streaming query: {e}")

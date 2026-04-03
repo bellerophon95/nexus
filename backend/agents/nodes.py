@@ -98,9 +98,11 @@ async def researcher_node(state: NexusState) -> dict[str, Any]:
             if tool_call["name"] == "vector_search":
                 from backend.agents.tools import vector_search
 
-                # Inject user_id from state into the tool call arguments
+                # Inject user_id and Tune Engine settings from state into the tool call arguments
                 args = dict(tool_call["args"])
                 args["user_id"] = state.get("user_id")
+                args["match_threshold"] = state.get("match_threshold", 0.2)
+                args["rerank"] = state.get("rerank", True)
                 results = vector_search.invoke(args)
                 if isinstance(results, list):
                     # Filter out error dicts

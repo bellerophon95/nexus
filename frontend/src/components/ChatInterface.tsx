@@ -139,7 +139,7 @@ export function ChatInterface({
     // Note: SSE (EventSource) doesn't support custom headers, 
     // so we pass user_id as a query param.
     const userId = getOrCreateSessionId();
-    let url = `${API_BASE_URL}/api/streaming/query?q=${encodeURIComponent(input)}&match_threshold=${matchThreshold}&rerank=${rerank}&user_id=${userId}`;
+    let url = `${API_BASE_URL}/api/streaming/query?q=${encodeURIComponent(input)}&match_threshold=${matchThreshold}&rerank=${rerank}&max_iterations=${maxIterations}&user_id=${userId}`;
     if (conversationId) {
       url += `&conversation_id=${conversationId}`;
     }

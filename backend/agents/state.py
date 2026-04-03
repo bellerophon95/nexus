@@ -37,3 +37,6 @@ class NexusState(TypedDict):
     activity_log: Annotated[list[dict[str, Any]], operator.add]
     # Current user ID for filtering retrieval
     user_id: str | None
+    # Retrieval settings from Tune Engine
+    match_threshold: float
+    rerank: bool
