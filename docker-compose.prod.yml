@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/nexus-backend:latest
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/nexus-backend:${IMAGE_TAG:-latest}
     restart: always
     environment:
       - PORT=8000
@@ -37,7 +37,7 @@ services:
       start_period: 120s
 
   frontend:
-    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/nexus-frontend:latest
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/nexus-frontend:${IMAGE_TAG:-latest}
     restart: always
     environment:
       - NEXT_PUBLIC_API_URL=https://${DOMAIN_NAME}
