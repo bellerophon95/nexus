@@ -4,7 +4,7 @@ import os
 import threading
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables before any other imports
@@ -52,8 +52,10 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 # Custom Middleware (Disabled temporarily to debug streaming hang)
 # app.add_middleware(RequestContextMiddleware)
 
-# Routes
+# 1. Health and System (lowest priority to avoid shadowing)
 app.include_router(routes_health.router, prefix="/api", tags=["Health"])
+
+# 2. Functional Domains
 app.include_router(routes_ingest.router, prefix="/api/ingest", tags=["Ingestion"])
 app.include_router(routes_search.router, prefix="/api/search", tags=["Search"])
 app.include_router(routes_agents.router, prefix="/api/agents", tags=["Agents"])
@@ -63,13 +65,34 @@ app.include_router(routes_history.router, prefix="/api/history", tags=["History"
 app.include_router(routes_tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(routes_skills.router, prefix="/api/skills", tags=["Skills"])
 
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(status.HTTP_404_NOT_FOUND)
+async def custom_404_handler(request: Request, exc: Exception):
+    logger.warning(f"404 Not Found Diagnostic: {request.method} {request.url.path}")
+    return JSONResponse(
+        status_code=404,
+        content={
+            "detail": "Not Found",
+            "path": request.url.path,
+            "method": request.method,
+            "suggestion": "Check /api/health for registered routes",
+        },
+    )
+
 
 @app.on_event("startup")
 async def startup_event():
     """
-    Nexus Platform Startup: Initialize tracing, validate config, and warm up heavy NLP models.
+    Nexus Platform Startup: Initialize tracing, validate config, and log registered routes.
     """
     print(f"--- {settings.APP_NAME} Startup ---")
+
+    # Diagnostic: Log all registered routes
+    for route in app.routes:
+        if hasattr(route, "path"):
+            logger.info(f"Registered route: {route.path}")
 
     from backend.guardrails.input_guard import warmup_guardrails
     from backend.observability.tracing import init_tracing
