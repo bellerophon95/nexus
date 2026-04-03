@@ -11,13 +11,15 @@ logger = logging.getLogger(__name__)
 
 _nlp_executor = None
 
+import multiprocessing as mp
+
 
 def get_nlp_executor():
     """Lazy loader for the NLP ProcessPoolExecutor to avoid 'spawn' deadlocks."""
     global _nlp_executor
     if _nlp_executor is None:
         logger.info("Initializing NLP Process Pool (max_workers=1)...")
-        _nlp_executor = ProcessPoolExecutor(max_workers=1)
+        _nlp_executor = ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn"))
     return _nlp_executor
 
 

@@ -33,8 +33,8 @@ RUN pip install "numpy==1.26.4"
 # This stage handles document parsing, spacy, and pii tools
 FROM base-builder AS nlp-builder
 RUN pip install --prefix=/install/nlp \
-    "spacy>=3.7" \
-    "unstructured[pdf]>=0.15" \
+    "spacy==3.7.5" \
+    "unstructured[pdf]==0.15.0" \
     "pypdf>=5.1.0" \
     "python-magic>=0.4.27" \
     "simhash>=2.0" \

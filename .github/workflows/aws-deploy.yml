@@ -78,8 +78,6 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/nexus-backend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   build-frontend:
     name: Build Frontend
@@ -110,8 +108,6 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=https://${{ secrets.DOMAIN_NAME || 'project-nexus.duckdns.org' }}
           tags: ${{ steps.login-ecr.outputs.registry }}/nexus-frontend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   deploy:
     name: Deploy to EC2
