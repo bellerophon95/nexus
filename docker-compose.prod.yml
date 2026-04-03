@@ -20,6 +20,7 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_HOST}
       - COHERE_API_KEY=${COHERE_API_KEY}
+      - CACHE_ENABLED=false
     deploy:
       resources:
         limits:

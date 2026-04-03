@@ -42,6 +42,13 @@ class SemanticCache:
         self.similarity_threshold = similarity_threshold
         self.ttl = ttl
 
+        # Kill switch: set CACHE_ENABLED=false to bypass Redis entirely
+        cache_enabled = os.getenv("CACHE_ENABLED", "true").lower() not in ("false", "0", "no")
+        if not cache_enabled:
+            self.redis = None
+            logger.warning("⚠️ Semantic Cache: Disabled via CACHE_ENABLED=false env var.")
+            return
+
         if self.redis_url and self.redis_token:
             try:
                 self.redis = Redis(url=self.redis_url, token=self.redis_token)
