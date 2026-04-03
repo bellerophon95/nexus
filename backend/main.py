@@ -34,8 +34,6 @@ allowed_origins = [
     "http://127.0.0.1:3000",
 ]
 
-from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -45,8 +43,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Trust proxy headers (e.g. X-Forwarded-Proto) from Caddy
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+# Note: Proxy header trust (X-Forwarded-Proto) is handled by uvicorn's
+# --proxy-headers flag (passed in docker-compose.prod.yml and run command).
 
 
 # Custom Middleware (Disabled temporarily to debug streaming hang)
@@ -142,4 +140,11 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run(
+        "backend.main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=True,
+        proxy_headers=True,
+        forwarded_allow_ips="*",
+    )

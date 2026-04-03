@@ -176,7 +176,6 @@ export default function Home() {
              isActive={activeTab === "library"} 
              onClick={() => setActiveTab("library")}
              isOpen={isSidebarOpen}
-             badge={selectedSkills.length > 0 ? selectedSkills.length : undefined}
           />
 
           {isSidebarOpen && (
