@@ -146,6 +146,8 @@ jobs:
               \"echo $ENV_B64 | base64 -d > .env\",
               \"aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY\",
               \"docker-compose -f docker-compose.prod.yml pull\",
+              \"docker-compose -f docker-compose.prod.yml down --remove-orphans\",
+              \"sleep 5\",
               \"docker-compose -f docker-compose.prod.yml up -d --force-recreate\",
               \"docker system prune -af\"
             ]" \

@@ -3,21 +3,20 @@
 }
 
 {$DOMAIN_NAME} {
-    # Backend (FastAPI) API routes
-    handle /api/* {
+    # Match API FIRST (strict ordering)
+    route /api* {
         reverse_proxy backend:8000 {
             flush_interval -1
-            header_up Connection "keep-alive"
-            header_up X-Accel-Buffering "no"
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
             lb_try_duration 120s
             lb_try_interval 5s
         }
     }
-
-    # Frontend (Next.js) - everything else
-    handle {
-        reverse_proxy frontend:3000
-    }
+    
+    # Static assets and everything else
+    reverse_proxy frontend:3000
 
     # Logging
     log {
