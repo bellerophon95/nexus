@@ -3,37 +3,8 @@ name: AWS EC2 Deployment
 on:
   push:
     branches: [ main ]
-    # Optional: Only trigger if relevant files change at a high level
-    paths-ignore:
-      - 'README.md'
-      - 'docs/**'
-      - '.gitignore'
 
 jobs:
-  changes:
-    name: Detect Changes
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      infra: ${{ steps.filter.outputs.infra }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'backend/**'
-              - 'Dockerfile'
-              - 'scripts/**'
-            frontend:
-              - 'frontend/**'
-            infra:
-              - 'docker-compose.prod.yml'
-              - 'Caddyfile'
-              - '.github/workflows/**'
-
   validate:
     name: Lint & Verify
     runs-on: ubuntu-latest
@@ -53,9 +24,6 @@ jobs:
 
   build-backend:
     name: Build Backend
-    needs: changes
-    # Only build if backend code changed OR infra changed
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -81,9 +49,6 @@ jobs:
 
   build-frontend:
     name: Build Frontend
-    needs: changes
-    # Only build if frontend code changed OR infra changed
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -111,15 +76,8 @@ jobs:
 
   deploy:
     name: Deploy to EC2
-    needs: [changes, validate, build-backend, build-frontend]
-    # IMPORTANT: Use always() + status checks to allow deployment even if builds were SKIPPED
-    if: |
-      always() &&
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      needs.validate.result == 'success' &&
-      (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped') &&
-      (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped')
+    needs: [validate, build-backend, build-frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
