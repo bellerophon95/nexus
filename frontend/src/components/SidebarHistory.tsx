@@ -33,7 +33,7 @@ export function SidebarHistory({
   const fetchConversations = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/conversations`, {
+      const response = await fetch(`${API_BASE_URL}/api/history/conversations`, {
         headers: getAuthHeaders()
       });
       
@@ -64,7 +64,7 @@ export function SidebarHistory({
     e.stopPropagation();
     
     try {
-      const response = await fetch(`${API_BASE_URL}/api/conversations/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/history/conversations/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });

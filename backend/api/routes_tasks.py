@@ -1,14 +1,39 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from backend.api.security import get_user_id
 from backend.database.supabase import get_async_supabase
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/tasks/{task_id}")
+@router.get("")
+async def list_tasks_endpoint(user_id: str = Depends(get_user_id)):
+    """
+    Retrieve all background ingestion tasks for the current user.
+    """
+    try:
+        async_supabase = await get_async_supabase()
+        response = (
+            await async_supabase.table("ingestion_tasks")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(10)
+            .execute()
+        )
+
+        return response.data
+    except Exception as e:
+        logger.error(f"Error listing tasks in routes_tasks: {e}")
+        raise HTTPException(
+            status_code=500, detail="Internal server error while listing tasks"
+        )
+
+
+@router.get("/{task_id}")
 async def get_task_status_endpoint(task_id: str):
     """
     Retrieve the status and results of a background ingestion task from Supabase.

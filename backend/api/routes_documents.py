@@ -40,8 +40,33 @@ def delete_document(document_id: str):
         if not check.data:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        # Execute deletion
+        # Execute deletion from Supabase
         response = get_supabase().table("documents").delete().eq("id", document_id).execute()
+
+        # Execute deletion of chunks from Qdrant using the document_id
+        try:
+            qdrant = get_qdrant()
+            qdrant.delete(
+                collection_name="nexus_chunks",
+                points_selector=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="document_id", match=models.MatchValue(value=document_id)
+                        )
+                    ]
+                ),
+            )
+            logger.info(f"Successfully deleted Qdrant chunks for document: {document_id}")
+        except Exception as qe:
+            logger.error(f"Failed to delete Qdrant chunks for document {document_id}: {qe}")
+            
+        # Invalidate Semantic Cache
+        try:
+            from backend.cache.semantic_cache import get_semantic_cache
+            get_semantic_cache().invalidate_for_documents([document_id])
+            logger.info(f"Invalidated semantic cache for document: {document_id}")
+        except Exception as ce:
+            logger.error(f"Failed to invalidate cache for document {document_id}: {ce}")
 
         # In the current Supabase SDK, we check if records were actually affected
         if hasattr(response, "data") and len(response.data) > 0:

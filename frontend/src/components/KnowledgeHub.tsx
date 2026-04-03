@@ -7,8 +7,14 @@ import {
   Layers,
   Search,
   Upload,
-  Zap
+  Zap,
+  Clock,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
+import { IngestionTask } from "@/lib/types";
+import { API_BASE_URL } from "@/lib/constants";
+import { getAuthHeaders } from "@/lib/auth";
 import { DocumentLibrary } from "@/components/DocumentLibrary";
 import { UploadPanel } from "@/components/UploadPanel";
 import { SkillHub } from "@/components/SkillHub";
@@ -34,14 +40,106 @@ export function KnowledgeHub({ selectedSkills, onToggleSkill }: KnowledgeHubProp
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"documents" | "skills">("documents");
+  const [activeTasks, setActiveTasks] = useState<IngestionTask[]>([]);
+
+  // Fetch initial active tasks on mount
+  React.useEffect(() => {
+    const fetchActiveTasks = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/ingest/active`, {
+          headers: getAuthHeaders(),
+        });
+        if (response.ok) {
+          const tasks = await response.json();
+          if (tasks.length > 0) {
+            setActiveTasks(tasks);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch initial active tasks:", err);
+      }
+    };
+    fetchActiveTasks();
+  }, []);
+
+  // Polling for active tasks
+  React.useEffect(() => {
+    // If no tasks, do nothing
+    if (activeTasks.length === 0) return;
+
+    // Check if any tasks actually need polling
+    const stillActive = activeTasks.filter(t => t.status === "pending" || t.status === "processing");
+    if (stillActive.length === 0) return;
+
+    const pollInterval = setInterval(async () => {
+      const updatedTasks = [...activeTasks];
+      let hasChanges = false;
+      let needsRefresh = false;
+
+      await Promise.all(stillActive.map(async (task) => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/ingest/status/${task.id}`, {
+            headers: getAuthHeaders(),
+          });
+          
+          if (response.ok) {
+            const data: IngestionTask = await response.json();
+            const idx = updatedTasks.findIndex(t => t.id === task.id);
+            if (idx !== -1) {
+              // Only update if something changed
+              if (updatedTasks[idx].status !== data.status || updatedTasks[idx].progress !== data.progress) {
+                updatedTasks[idx] = { ...updatedTasks[idx], ...data };
+                hasChanges = true;
+              }
+              
+              if (data.status === "completed" || data.status === "skipped") {
+                needsRefresh = true;
+                // Linger for 3 seconds before removing
+                setTimeout(() => {
+                  setActiveTasks(prev => prev.filter(t => t.id !== task.id));
+                }, 3000);
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to poll task ${task.id}:`, err);
+        }
+      }));
+
+      if (hasChanges) {
+        setActiveTasks(updatedTasks);
+      }
+      if (needsRefresh) {
+        setRefreshTrigger(prev => prev + 1);
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [activeTasks]);
 
   const handleUploadSuccess = () => {
-    // Increment trigger to refresh DocumentLibrary
+    // Increment trigger to refresh DocumentLibrary when a task actually completes
     setRefreshTrigger(prev => prev + 1);
-    // Optionally close the modal after a short delay
-    setTimeout(() => {
-      setIsUploadModalOpen(false);
-    }, 2000);
+  };
+
+  const handleTaskCreated = (taskId: string) => {
+    // Add to active tasks with initial state
+    const newTask: IngestionTask = {
+      id: taskId,
+      status: "pending",
+      progress: 0,
+      message: "Syncing with ingestion worker...",
+      created_at: new Date().toISOString(),
+    };
+    setActiveTasks(prev => [newTask, ...prev]);
+    
+    // Close the modal immediately
+    setIsUploadModalOpen(false);
+    console.log(`Ingestion task created: ${taskId}`);
+  };
+
+  const handleDismissTask = (taskId: string) => {
+    setActiveTasks(prev => prev.filter(t => t.id !== taskId));
   };
 
   return (
@@ -103,7 +201,11 @@ export function KnowledgeHub({ selectedSkills, onToggleSkill }: KnowledgeHubProp
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
-              <UploadPanel onUploadSuccess={handleUploadSuccess} showTitle={false} />
+              <UploadPanel 
+                onUploadSuccess={handleUploadSuccess} 
+                onTaskCreated={handleTaskCreated}
+                showTitle={false} 
+              />
             </div>
           </DialogContent>
         </Dialog>
@@ -117,6 +219,8 @@ export function KnowledgeHub({ selectedSkills, onToggleSkill }: KnowledgeHubProp
             refreshTrigger={refreshTrigger} 
             searchQuery={searchQuery}
             showTitle={false} 
+            activeTasks={activeTasks}
+            onDismissTask={handleDismissTask}
           />
         ) : (
           <SkillHub 

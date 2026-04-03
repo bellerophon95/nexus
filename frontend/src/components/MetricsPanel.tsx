@@ -67,6 +67,8 @@ export function MetricsPanel({ metrics, isLoading }: MetricsPanelProps) {
         return <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold tracking-wider">PASSED</Badge>;
       case "warning":
         return <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/30 font-bold tracking-wider">WARNING</Badge>;
+      case "failed":
+        return <Badge className="bg-rose-500/10 text-rose-400 border-rose-500/30 font-bold tracking-wider">FAILED</Badge>;
       default:
         return <Badge className="bg-rose-500/10 text-rose-400 border-rose-500/30 font-bold tracking-wider">FAILED</Badge>;
     }
@@ -77,15 +79,35 @@ export function MetricsPanel({ metrics, isLoading }: MetricsPanelProps) {
       <MetricItem 
         icon={<Fingerprint className="h-4 w-4" />} 
         label="Faithfulness" 
-        value={typeof metrics.hallucinationScore === 'number' ? `${((1 - metrics.hallucinationScore) * 100).toFixed(0)}%` : "N/A"}
-        color={typeof metrics.hallucinationScore === 'number' ? getScoreColor(1 - metrics.hallucinationScore) : "text-slate-400"}
+        value={
+          typeof metrics.hallucinationScore === 'number'
+            ? `${((1 - metrics.hallucinationScore) * 100).toFixed(0)}%`
+            : metrics.tier === 'general'
+            ? "General KB"
+            : "Eval N/A"
+        }
+        color={
+          typeof metrics.hallucinationScore === 'number'
+            ? getScoreColor(1 - metrics.hallucinationScore)
+            : "text-slate-500"
+        }
       />
 
       <MetricItem 
         icon={<BarChart3 className="h-4 w-4" />} 
         label="Relevance" 
-        value={typeof metrics.relevanceScore === 'number' ? `${(metrics.relevanceScore * 100).toFixed(0)}%` : "N/A"}
-        color={typeof metrics.relevanceScore === 'number' ? getScoreColor(metrics.relevanceScore) : "text-slate-400"}
+        value={
+          typeof metrics.relevanceScore === 'number'
+            ? `${(metrics.relevanceScore * 100).toFixed(0)}%`
+            : metrics.tier === 'general'
+            ? "General KB"
+            : "Eval N/A"
+        }
+        color={
+          typeof metrics.relevanceScore === 'number'
+            ? getScoreColor(metrics.relevanceScore)
+            : "text-slate-500"
+        }
       />
       
       <MetricItem 

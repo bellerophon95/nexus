@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import logging
 import os
 import shutil
@@ -32,8 +33,14 @@ def process_ingestion_task(
     """
     try:
         supabase = get_supabase()
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         supabase.table("ingestion_tasks").update(
-            {"status": "processing", "progress": 5.0, "message": "Analyzing document structure..."}
+            {
+                "status": "processing",
+                "progress": 5.0,
+                "message": "Analyzing document structure...",
+                "updated_at": now_iso
+            }
         ).eq("id", task_id).execute()
 
         logger.info(f"Producing ingestion tasks for {filename} (Task: {task_id})")
@@ -55,6 +62,13 @@ def process_ingestion_task(
 
         chunks = result["chunks"]
         total_chunks = len(chunks)
+
+        if total_chunks == 0:
+            logger.warning(f"No chunks generated for {filename} (Task: {task_id}). Marking as error.")
+            supabase.table("ingestion_tasks").update(
+                {"status": "error", "message": "Document contains no readable text or is empty."}
+            ).eq("id", task_id).execute()
+            return
 
         # Initialize chunk_count immediately to avoid division-by-zero in worker
         supabase.table("ingestion_tasks").update({"chunk_count": total_chunks}).eq(
@@ -88,6 +102,8 @@ def process_ingestion_task(
             # Simple retry loop (max 3 attempts)
             for attempt in range(1, 4):
                 try:
+                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    supabase.table("ingestion_tasks").update({"updated_at": now_iso}).eq("id", task_id).execute()
                     supabase.table("ingestion_chunks").insert(batch).execute()
                     break
                 except Exception as e:
@@ -127,8 +143,8 @@ def process_ingestion_task(
             ).eq("id", task_id).execute()
 
 
-@router.post("/ingest", response_model=IngestResponse)
-async def ingest_file(
+@router.post("/", response_model=IngestResponse)
+async def ingest_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     is_personal: bool = Form(True),
@@ -137,9 +153,9 @@ async def ingest_file(
 ):
     """
     Ingests a document through the pipeline asynchronously.
-    Enforces a 10MB limit to prevent OOM on Render Free Tier.
+    Enforces a 5MB limit to prevent OOM on Render Free Tier.
     """
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
     try:
         # 1. Quick size check before saving to disk
@@ -150,11 +166,11 @@ async def ingest_file(
 
         if size > MAX_FILE_SIZE:
             logger.warning(
-                f"File upload rejected: {file.filename} is {(size / 1024 / 1024):.2f}MB (Max 10MB)"
+                f"File upload rejected: {file.filename} is {(size / 1024 / 1024):.2f}MB (Max 5MB)"
             )
             raise HTTPException(
                 status_code=413,
-                detail=f"File too large ({(size / 1024 / 1024):.1f}MB). The Free Tier limit is 10MB to prevent system instability.",
+                detail=f"File too large ({(size / 1024 / 1024):.1f}MB). The Free Tier limit is 5MB to prevent system instability.",
             )
 
         task_id = str(uuid.uuid4())
@@ -218,7 +234,57 @@ async def ingest_file(
         raise HTTPException(status_code=500, detail=error_msg)
 
 
-@router.get("/ingest/status/{task_id}")
+@router.get("/active")
+async def get_active_tasks(user_id: str = Depends(get_user_id)):
+    """
+    Retrieves all pending/processing/error tasks for the current user.
+    'error' tasks are only returned if updated within the last hour.
+    """
+    try:
+        def fetch_tasks():
+            now = datetime.datetime.now(datetime.timezone.utc)
+            one_hour_ago = (now - datetime.timedelta(hours=1)).isoformat()
+            
+            # Query active or recently failed tasks
+            return (
+                get_supabase()
+                .table("ingestion_tasks")
+                .select("*")
+                .eq("user_id", user_id)
+                .in_("status", ["pending", "processing", "error"])
+                .gte("updated_at", one_hour_ago)
+                .order("created_at", desc=True)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(fetch_tasks)
+        
+        tasks = []
+        for task in response.data:
+            # For error tasks, double check the age
+            if task["status"] == "error":
+                # Only show errors from the last 30 minutes in the active list
+                updated_at = datetime.datetime.fromisoformat(task["updated_at"].replace("Z", "+00:00"))
+                if (datetime.datetime.now(datetime.timezone.utc) - updated_at).total_seconds() > 1800:
+                    continue
+            
+            tasks.append({
+                "id": str(task["id"]),
+                "status": task["status"],
+                "progress": float(task.get("progress", 0)),
+                "message": task.get("message", ""),
+                "filename": task.get("filename", "Unknown Source"),
+                "document_id": str(task.get("document_id")) if task.get("document_id") else None,
+                "created_at": task["created_at"],
+            })
+            
+        return tasks
+    except Exception as e:
+        logger.error(f"Failed to fetch active tasks: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch active tasks")
+
+
+@router.get("/status/{task_id}")
 async def get_ingest_status(task_id: str):
     """
     Retrieves the status and progress of a background ingestion task.

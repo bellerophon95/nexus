@@ -29,14 +29,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Pre-pin numpy for consistency across parallel segments
 RUN pip install "numpy==1.26.4"
 
-# --- Stage 2a: Parallel ML Builder ---
-# This stage only handles the heavy compute stack
-FROM base-builder AS ml-builder
-RUN pip install --prefix=/install/ml \
-    "torch>=2.0.0" \
-    "transformers>=4.40.0" \
-    "sentence-transformers>=3.0"
-
 # --- Stage 2b: Parallel NLP & Tools Builder ---
 # This stage handles document parsing, spacy, and pii tools
 FROM base-builder AS nlp-builder
@@ -75,6 +67,7 @@ RUN pip install --prefix=/install/core \
     "qdrant-client>=1.12" \
     "supabase>=2.13" \
     "upstash-redis>=1.2" \
+    "cohere>=5.0.0" \
     "datasets>=2.19" \
     "pandas>=2.2" \
     "langfuse==2.57.12" \
@@ -83,21 +76,16 @@ RUN pip install --prefix=/install/core \
 # --- Stage 3: Merge & Verify ---
 FROM base-builder AS final-builder
 
-# Merge all three parallel prefixes back into the primary environment
-# Note: Binaries go to /usr/local/bin, libs to /usr/local/lib/python3.12/site-packages
+# Merge parallel prefixes into the primary environment
+# Note: ml-builder removed — reranking now uses Cohere Rerank API (saves ~1-2GB image size)
 COPY --from=core-builder /install/core /usr/local
-COPY --from=ml-builder /install/ml /usr/local
 COPY --from=nlp-builder /install/nlp /usr/local
 
-# Re-download the spacy model in the final merge step
+# Download only the small spaCy model (sm = 12MB vs lg = 400MB)
 RUN python -m spacy download en_core_web_sm
 
-# Final verification
-RUN python -c "import langgraph; import anthropic; import langchain; import jose; import torch; print('All critical imports verified OK')"
-
-# Pre-download SentenceTransformer model
-COPY scripts/download_models.py ./scripts/download_models.py
-RUN python scripts/download_models.py
+# Final verification (torch removed from stack)
+RUN python -c "import langgraph; import anthropic; import langchain; import jose; import cohere; print('All critical imports verified OK')"
 
 # --- Stage 4: Production Runtime ---
 FROM base AS runtime

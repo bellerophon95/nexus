@@ -265,13 +265,12 @@ async def query_streaming(
             # Wait for both with a reasonable timeout to prevent UI "hang"
             # If evaluation takes too long, we'll continue with partial data
             try:
-                # Give it up to 4 seconds for GPT-4o-mini to respond
-                eval_task = asyncio.create_task(
-                    asyncio.gather(
+                async def run_evals():
+                    return await asyncio.gather(
                         asyncio.wait_for(judge_task, timeout=4.0),
                         asyncio.wait_for(output_guard_task, timeout=4.0),
                     )
-                )
+                eval_task = asyncio.create_task(run_evals())
 
                 while not eval_task.done():
                     # Check for client disconnect during wait
@@ -301,30 +300,44 @@ async def query_streaming(
             # Frontend does (1 - hallucinationScore) * 100 for Faithfulness.
             # So if Faithfulness is 5/5 (best), we want hallucinationScore to be 0.0.
             # If Faithfulness is 1/5 (worst), we want hallucinationScore to be 1.0.
+            # IMPORTANT: Use None (not 5) as fallback — a failed/timed-out judge must show N/A,
+            # NOT a perfect score. Defaulting to 5 was silently masking evaluation failures.
 
-            raw_faithfulness = judge_results.get("faithfulness", 5)
-            # Normalize 1-5 to 1.0-0.0 for "hallucination score" (inverted)
-            hallucination_score = max(0.0, min(1.0, (5 - raw_faithfulness) / 4.0))
+            raw_faithfulness = judge_results.get("faithfulness")  # None if judge failed/timed out
+            hallucination_score = (
+                max(0.0, min(1.0, (5 - raw_faithfulness) / 4.0))
+                if raw_faithfulness is not None
+                else None
+            )
 
-            raw_relevance = judge_results.get("relevance", 5)
-            # Normalize 1-5 to 0.0-1.0 for relevance
-            relevance_score = max(0.0, min(1.0, (raw_relevance - 1) / 4.0))
+            raw_relevance = judge_results.get("relevance")  # None if judge failed/timed out
+            relevance_score = (
+                max(0.0, min(1.0, (raw_relevance - 1) / 4.0))
+                if raw_relevance is not None
+                else None
+            )
 
             # 6. Final Guardrail State
+            # Priority: input fail > output fail > output warning > passed
             guardrail_display_status = "passed"
             if not guard_result.passed:
                 guardrail_display_status = "failed"
-            elif getattr(output_guard, "passed", True) is False:
-                logger.warning(f"Output blocked by guardrails: {output_guard.blocked_reason}")
+            elif output_guard is not None and not getattr(output_guard, "passed", True):
+                logger.warning(f"Output blocked by guardrails: {getattr(output_guard, 'blocked_reason', 'Unknown')}")
                 full_answer = output_guard.sanitized_content
                 guardrail_display_status = "failed"
-            else:  # Passed, timeout, or skip
+            elif output_guard is not None and getattr(output_guard, "warnings", []):
+                # Has warnings (e.g. mild hallucination risk, low-severity PII) but wasn't blocked
+                guardrail_display_status = "warning"
+            else:
                 guardrail_display_status = "passed"
 
             metrics = {
                 "type": "metrics",
                 "latency": latency_ms,
                 "cache_hit": False,
+                # None when: tier is general (no context to judge faithfulness against)
+                # OR when the judge failed/timed out (failure should not masquerade as 100%)
                 "hallucinationScore": hallucination_score if tier != "general" else None,
                 "relevanceScore": relevance_score if tier != "general" else None,
                 "guardrailStatus": guardrail_display_status,

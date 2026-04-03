@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     # LLM Settings
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
+    COHERE_API_KEY: str | None = None
 
     # Guardrail Settings
     GUARDRAILS_ENABLED: bool = True

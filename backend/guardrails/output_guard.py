@@ -28,6 +28,12 @@ TECHNICAL_WHITELIST = [
     "development",
 ]
 
+# PII types severe enough to block the response outright
+HIGH_SEVERITY_PII = {"CREDIT_CARD", "US_SSN", "PASSWORD", "CRYPTO", "IBAN_CODE"}
+
+# Hallucination score above this threshold causes the guardrail to fail
+HALLUCINATION_BLOCK_THRESHOLD = 0.5
+
 
 def get_profanity():
     """Lazy loader for better_profanity."""
@@ -108,14 +114,32 @@ async def run_output_guardrails(
             logger.error(f"PII analysis failed in output: {e}")
 
     # Combine warnings
+    hallucination_score = hallucination_metadata.get("hallucination_score", 0.0) if hallucination_metadata else 0.0
     if hallucination_metadata:
         warnings.append(
-            f"Hallucination Risk: {hallucination_metadata.get('hallucination_score') * 100:.0f}%"
+            f"Hallucination Risk: {hallucination_score * 100:.0f}%"
         )
 
+    # Determine overall pass/fail:
+    # Fail if hallucination is above threshold (only when context was available)
+    hallucination_blocked = bool(context_chunks) and hallucination_score > HALLUCINATION_BLOCK_THRESHOLD
+    # Fail if high-severity PII is found in the output
+    pii_blocked = bool(HIGH_SEVERITY_PII.intersection(set(pii_types)))
+
+    output_passed = not hallucination_blocked and not pii_blocked
+
+    blocked_reason = None
+    if hallucination_blocked:
+        blocked_reason = f"Hallucination detected: {hallucination_score * 100:.0f}% of response is unsupported by source documents."
+        logger.warning(blocked_reason)
+    elif pii_blocked:
+        blocked_reason = f"High-severity PII detected in response output: {', '.join(HIGH_SEVERITY_PII.intersection(set(pii_types)))}"
+        logger.warning(blocked_reason)
+
     return GuardResult(
-        passed=True,
-        sanitized_content=answer,
+        passed=output_passed,
+        sanitized_content=answer if output_passed else "[RESPONSE BLOCKED: Content safety violation.]",
+        blocked_reason=blocked_reason,
         pii_detected=pii_types,
         warnings=warnings,
         metadata=hallucination_metadata,

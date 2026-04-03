@@ -24,6 +24,8 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
+import { API_BASE_URL } from "@/lib/constants";
+import { getAuthHeaders } from "@/lib/auth";
 
 export interface IngestionTask {
   id: string;
@@ -42,29 +44,42 @@ export function NotificationDrawer() {
   const prevTasksCount = useRef(0);
 
   useEffect(() => {
-    // 1. Initial Fetch
+    // 1. Fetch Tasks from Backend Proxy (Shadow Auth compatible)
     const fetchTasks = async () => {
-      const { data, error } = await supabase
-        .from("ingestion_tasks")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(10);
-      
-      if (data) {
-        setTasks(data);
-        prevTasksCount.current = data.length;
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/tasks`, {
+          headers: getAuthHeaders(),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setTasks(data);
+          
+          // Check for new tasks to update unread count
+          if (data.length > prevTasksCount.current && !isOpen) {
+            setUnreadCount(prev => prev + (data.length - prevTasksCount.current));
+          }
+          prevTasksCount.current = data.length;
+        }
+      } catch (error) {
+        console.error("Failed to fetch ingestion tasks:", error);
       }
     };
 
     fetchTasks();
 
-    // 2. Realtime Subscription
+    // 2. Poll for updates every 5 seconds
+    // (Bypasses Supabase Realtime RLS limitations for Shadow Auth)
+    const pollInterval = setInterval(fetchTasks, 5000);
+
+    // 3. Keep Realtime as "Best Effort" (Only works if user is signed into Supabase Auth)
     const channel = supabase
       .channel("ingestion_tasks_realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "ingestion_tasks" },
         (payload) => {
+          // We still handle realtime for those who ARE logged in, or if RLS is relaxed
           if (payload.eventType === "INSERT") {
             const newTask = payload.new as IngestionTask;
             setTasks((prev) => [newTask, ...prev].slice(0, 10));
@@ -74,7 +89,6 @@ export function NotificationDrawer() {
             setTasks((prev) => 
               prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
             );
-            // If it just completed, trigger a small notification hint if drawer is closed
             if (updatedTask.status === "completed" && !isOpen) {
                setUnreadCount((c) => c + 1);
             }
@@ -84,6 +98,7 @@ export function NotificationDrawer() {
       .subscribe();
 
     return () => {
+      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
   }, [isOpen]);

@@ -9,10 +9,11 @@ import { getAuthHeaders } from "@/lib/auth";
 
 interface UploadPanelProps {
   onUploadSuccess?: (docId: string, chunks: number) => void;
+  onTaskCreated?: (taskId: string) => void;
   showTitle?: boolean;
 }
 
-export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelProps) {
+export function UploadPanel({ onUploadSuccess, onTaskCreated, showTitle = true }: UploadPanelProps) {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [progress, setProgress] = useState(0);
@@ -24,7 +25,7 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
       setStatus("error");
       const rejection = fileRejections[0];
       if (rejection.errors[0]?.code === "file-too-large") {
-        setMessage("File too large. Max limit is 10MB for the Free Tier.");
+        setMessage("File too large. Max limit is 5MB for the Free Tier.");
       } else {
         setMessage(rejection.errors[0]?.message || "File rejected.");
       }
@@ -47,69 +48,10 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
       "text/plain": [".txt"],
       "text/csv": [".csv"],
     },
-    maxSize: 10 * 1024 * 1024, // 10MB
+    maxSize: 5 * 1024 * 1024, // 5MB
     multiple: false,
   });
 
-  const pollTaskStatus = async (taskId: string) => {
-    let retryCount = 0;
-    const MAX_RETRIES = 3;
-    let isMounted = true;
-
-    const poll = async () => {
-      if (!isMounted) return;
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/ingest/status/${taskId}`, {
-          headers: getAuthHeaders(),
-        });
-        
-        if (response.status === 404) {
-          setStatus("error");
-          setMessage("Ingestion task lost. The server may have restarted.");
-          return;
-        }
-
-        if (!response.ok) throw new Error("Failed to poll task status");
-        
-        const data = await response.json();
-        setProgress(data.progress || 0);
-        
-        if (data.status === "completed") {
-          setStatus("success");
-          setMessage(data.message);
-          if (onUploadSuccess) {
-            onUploadSuccess(data.document_id, data.chunk_count || 0);
-          }
-        } else if (data.status === "error") {
-          setStatus("error");
-          setMessage(data.message || "Ingestion failed");
-        } else if (data.status === "skipped") {
-          setStatus("success");
-          setProgress(100);
-          setMessage("Document already exists (skipped).");
-        } else {
-          // Continue polling if still pending/processing
-          setTimeout(poll, 1500);
-        }
-        
-        retryCount = 0;
-      } catch (error) {
-        retryCount++;
-        if (retryCount >= MAX_RETRIES) {
-          setStatus("error");
-          setMessage("Connection to ingestion service lost. Retrying manually...");
-        } else {
-          setTimeout(poll, 2000); // Wait bit longer on error
-        }
-      }
-    };
-
-    // Start initial poll
-    poll();
-
-    return () => { isMounted = false; };
-  };
 
   const handleUpload = async () => {
     if (!file) return;
@@ -123,7 +65,7 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
     formData.append("is_personal", String(isPersonal));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/ingest`, {
+      const response = await fetch(`${API_BASE_URL}/api/ingest/`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: formData,
@@ -131,7 +73,7 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
 
       if (!response.ok) {
         if (response.status === 413) {
-           throw new Error("File too large for the current system limits (Max 10MB).");
+           throw new Error("File too large for the current system limits (Max 5MB).");
         }
         
         try {
@@ -143,8 +85,15 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
       }
 
       const result = await response.json();
-      // Start polling for the task status
-      pollTaskStatus(result.task_id);
+      
+      // Notify parent immediately that the task has been created
+      if (onTaskCreated) {
+        onTaskCreated(result.task_id);
+      }
+      
+      // We no longer poll here; the parent (KnowledgeHub) handles it
+      setStatus("success");
+      setMessage("Upload successful! Ingestion protocol initiated.");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Ingestion failed");
@@ -187,7 +136,7 @@ export function UploadPanel({ onUploadSuccess, showTitle = true }: UploadPanelPr
           <p className="mt-4 text-xs font-medium text-slate-400 group-hover:text-slate-300">
             {isDragActive ? "Drop the file here" : "Drag & drop PDF, DOCX, TXT, CSV, or HTML"}
           </p>
-          <p className="mt-1 text-[10px] text-slate-600">Max size: 10MB (Free Tier Optimization)</p>
+          <p className="mt-1 text-[10px] text-slate-600">Max size: 5MB (Free Tier Optimization)</p>
         </div>
       ) : (
         <div className="space-y-4">

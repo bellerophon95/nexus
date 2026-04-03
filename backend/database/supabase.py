@@ -1,4 +1,5 @@
 import logging
+import threading
 
 from supabase import AsyncClient, Client, acreate_client, create_client
 
@@ -34,22 +35,19 @@ async def get_async_supabase_client() -> AsyncClient:
     return await acreate_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 
-# Lazy singletons
-_supabase: Client = None
-_async_supabase: AsyncClient = None
+# Thread-local storage for singletons to avoid deadlocks in multi-threaded contexts
+_thread_local = threading.local()
 
 
 def get_supabase() -> Client:
-    """Get or initialize the synchronous Supabase client."""
-    global _supabase
-    if _supabase is None:
-        _supabase = get_supabase_client()
-    return _supabase
+    """Get or initialize the synchronous Supabase client for the current thread."""
+    if not hasattr(_thread_local, "supabase"):
+        _thread_local.supabase = get_supabase_client()
+    return _thread_local.supabase
 
 
 async def get_async_supabase() -> AsyncClient:
-    """Get or initialize the asynchronous Supabase client."""
-    global _async_supabase
-    if _async_supabase is None:
-        _async_supabase = await get_async_supabase_client()
-    return _async_supabase
+    """Get or initialize the asynchronous Supabase client for the current thread."""
+    if not hasattr(_thread_local, "async_supabase"):
+        _thread_local.async_supabase = await get_async_supabase_client()
+    return _thread_local.async_supabase

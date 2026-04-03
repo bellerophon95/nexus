@@ -67,7 +67,13 @@ def insert_chunks(
     try:
         # Prepare data with foreign key
         payload = []
-        for chunk in chunks_data:
+        for i, chunk in enumerate(chunks_data):
+            embedding = chunk.get("embedding")
+            if not embedding or len(embedding) != 384:
+                error_msg = f"Invalid embedding at index {i}: Expected 384 dims, got {len(embedding) if embedding else 'None'}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
             item = {
                 "document_id": document_id,
                 "text": chunk["text"],
@@ -76,7 +82,7 @@ def insert_chunks(
                 "topics": chunk["topics"],
                 "key_phrases": chunk["key_phrases"],
                 "sparse_tokens": chunk["sparse_tokens"],
-                "embedding": chunk["embedding"],
+                "embedding": embedding,
                 "user_id": user_id,
                 "is_personal": is_personal,
             }

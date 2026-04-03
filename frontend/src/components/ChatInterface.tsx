@@ -139,7 +139,7 @@ export function ChatInterface({
     // Note: SSE (EventSource) doesn't support custom headers, 
     // so we pass user_id as a query param.
     const userId = getOrCreateSessionId();
-    let url = `${API_BASE_URL}/api/query?q=${encodeURIComponent(input)}&match_threshold=${matchThreshold}&rerank=${rerank}&user_id=${userId}`;
+    let url = `${API_BASE_URL}/api/streaming/query?q=${encodeURIComponent(input)}&match_threshold=${matchThreshold}&rerank=${rerank}&user_id=${userId}`;
     if (conversationId) {
       url += `&conversation_id=${conversationId}`;
     }
@@ -250,7 +250,7 @@ export function ChatInterface({
 
   const handleFeedback = async (messageId: string, score: number) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/messages/${messageId}/feedback`, {
+      const response = await fetch(`${API_BASE_URL}/api/history/messages/${messageId}/feedback`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -420,7 +420,7 @@ export function ChatInterface({
               />
             ))
           )}
-          {isLoading && messages[messages.length - 1].content === "" && (
+          {isLoading && messages[messages.length - 1]?.content === "" && (
             <div className="flex items-center gap-3 text-slate-400">
                <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
                <span className="text-xs italic tracking-wide">Orchestrating search agents...</span>

@@ -32,7 +32,7 @@ def _hard_split_text(text: str, max_chars: int) -> list[str]:
 
 
 def get_resources():
-    global _nlp, _model, _tokenizer
+    global _nlp, _tokenizer
     if _nlp is None:
         try:
             import spacy
@@ -45,14 +45,7 @@ def get_resources():
         except Exception as e:
             logger.error(f"Failed to load spaCy model: {e}")
             raise
-    if _model is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-
-            _model = SentenceTransformer("all-MiniLM-L6-v2")
-        except Exception as e:
-            logger.error(f"Failed to load SentenceTransformer: {e}")
-            raise
+            
     if _tokenizer is None:
         try:
             import tiktoken
@@ -61,11 +54,11 @@ def get_resources():
         except Exception as e:
             logger.error(f"Failed to load tiktoken encoding: {e}")
             raise
-    return _nlp, _model, _tokenizer
+    return _nlp, _tokenizer
 
 
 def count_tokens(text: str) -> int:
-    _, _, tokenizer = get_resources()
+    _, tokenizer = get_resources()
     return len(tokenizer.encode(text))
 
 
@@ -83,7 +76,7 @@ def semantic_chunking(
     """
     Performs semantic chunking with High-Performance optimizations for large docs.
     """
-    nlp, model, tokenizer = get_resources()
+    nlp, tokenizer = get_resources()
 
     # Heuristic: Use ultra-fast sentencizer for massive documents (>1M chars)
     is_massive = len(text) > 1000000
@@ -123,9 +116,9 @@ def semantic_chunking(
         if not seg_sentences:
             continue
 
-        # 3. Embed sentences for THIS segment
-        # This prevents the embedding matrix from growing to the size of the whole doc
-        embeddings = model.encode(seg_sentences, batch_size=64, show_progress_bar=False)
+        # 3. Embed sentences for THIS segment using OpenAI
+        from backend.ingestion.embedder import generate_dense_embeddings_batch
+        embeddings = generate_dense_embeddings_batch(seg_sentences)
 
         # 4. Semantic Splitting for THIS segment
         distances = []

@@ -2,163 +2,131 @@ import asyncio
 import json
 import logging
 import os
+from typing import List, Dict, Any
 
 from openai import AsyncOpenAI
-
-from backend.database.supabase import get_async_supabase
+from qdrant_client import QdrantClient, models
 
 logger = logging.getLogger(__name__)
 
 
 class SkillOrchestrator:
     """
-    Manages the orchestration of 'Nexus Skills' from Supabase.
-    Uses a database-driven strategy to inject only relevant expert roles into the agent context.
+    Manages the orchestration of 'Nexus Skills' using Qdrant Vector Search.
+    Enables 'Radial Discovery' by finding semantically relevant expertise for any query.
     """
 
     def __init__(self, api_key: str):
-        self.client = AsyncOpenAI(api_key=api_key)
-        self.skills_index: list[dict] = []
-        self._load_lock = asyncio.Lock()
-
-    async def load_database_skills(self):
-        """Loads the latest skills index by merging local and database registries."""
-        async with self._load_lock:
-            # 1. Initial load from local registry (Standard Skills)
-            self._load_local_registry()
-            local_count = len(self.skills_index)
-
-            # 2. Re-fetch from Supabase to augment with dynamic skills
-            try:
-                supabase = await get_async_supabase()
-                response = await supabase.table("skills").select("*").execute()
-
-                if response.data:
-                    # Merge by ID, database takes precedence for matching IDs
-                    remote_skills = {s["id"]: s for s in response.data}
-                    local_skills = {s["id"]: s for s in self.skills_index}
-
-                    merged = {**local_skills, **remote_skills}
-                    self.skills_index = list(merged.values())
-                    logger.info(
-                        f"Loaded {len(self.skills_index)} expert skills ({local_count} local, {len(remote_skills)} remote)."
-                    )
-                else:
-                    logger.warning("Supabase skill registry empty. Using only local definitions.")
-
-            except Exception as e:
-                logger.error(f"Failed to load database skill manifests: {e}. Using local fallback.")
-
-    def _load_local_registry(self):
-        """Loads skills from the local registry.json file as a fallback."""
-        try:
-            registry_path = os.path.join("backend", "skills", "registry.json")
-            if os.path.exists(registry_path):
-                with open(registry_path) as f:
-                    data = json.load(f)
-                    # Flatten local registry format to match Supabase schema
-                    self.skills_index = []
-                    for item in data:
-                        skill = {"id": item["id"]}
-                        skill.update(item.get("metadata", {}))
-                        self.skills_index.append(skill)
-                logger.info(f"Loaded {len(self.skills_index)} expert skills from local registry.")
-            else:
-                logger.error(f"Local registry not found at {registry_path}")
-                self.skills_index = []
-        except Exception as e:
-            logger.error(f"Failed to load local skill registry: {e}")
-            self.skills_index = []
-
-    async def get_relevant_skills(self, query: str, top_k: int = 3) -> list[dict]:
-        """Uses LLM to select the most relevant skills for a given query."""
-        await self.load_database_skills()
-
-        if not self.skills_index:
-            return []
-
-        # Prepare a list of candidates including the database-backed role/expertise metadata
-        candidate_list = []
-        for s in self.skills_index:
-            candidate_list.append(
-                {
-                    "id": s["id"],
-                    "role": s.get("role", "General Analyst"),
-                    "name": s.get("name", s["id"]),
-                    "description": s.get("description", ""),
-                    "expertise": s.get("expertise", []),
-                }
-            )
-
-        prompt = f"""
-        Given the user query: "{query}"
-
-        Identify the top {top_k} most relevant expert skill roles from the following list.
-        Each role has specific expertise and instructions.
+        self.openai_client = AsyncOpenAI(api_key=api_key)
         
-        Return ONLY a JSON list of skill IDs.
+        # Load Qdrant credentials from environment
+        qdrant_url = os.environ.get("QDRANT_URL", "https://8d7a6e9f-b393-4cf1-9138-d041cff24fe4.us-west-1-0.aws.cloud.qdrant.io:6333")
+        qdrant_api_key = os.environ.get("QDRANT_API_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIiwic3ViamVjdCI6ImFwaS1rZXk6ZDE5ZTI3NGEtOGI5NC00ZjY4LThjYWYtMmVkZTdiZmY1MDk3In0.92EUv4QVebX6-qjc_7VnIe7G_MahexsbDyUa9W5eheE")
+        
+        self.qdrant_client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
+        self.collection_name = "nexus_skills"
 
-        Available Skills:
-        {json.dumps(candidate_list, indent=2)}
+    async def get_embedding(self, text: str) -> List[float]:
+        """Generates a semantic vector for the query."""
+        resp = await self.openai_client.embeddings.create(
+            input=text,
+            model="text-embedding-3-small"
+        )
+        return resp.data[0].embedding
+
+    async def get_relevant_skills(self, query: str, top_k: int = 2) -> List[Dict[str, Any]]:
         """
-
+        Performs high-speed Radial Discovery using semantic vector search.
+        Identified skills are injected into the agent's reasoning loop.
+        """
         try:
-            response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are the Nexus Skill Orchestrator. Select the best expert roles for the task.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-            )
-
-            result = json.loads(response.choices[0].message.content)
-            selected_ids = (
-                result.get("selected_ids", []) or result.get("skills", []) or result.get("ids", [])
-            )
-
-            # Map IDs back to full skill objects
-            relevant = [s for s in self.skills_index if s["id"] in selected_ids]
-            return relevant[:top_k]
+            query_vector = await self.get_embedding(query)
+            
+            # Search Qdrant for semantically similar skill roles/descriptions
+            search_result = self.qdrant_client.query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                limit=top_k,
+                score_threshold=0.35 # Ensure relevance
+            ).points
+            
+            relevant_skills = []
+            for hit in search_result:
+                skill_data = hit.payload
+                skill_data["match_score"] = hit.score
+                relevant_skills.append(skill_data)
+                
+            if relevant_skills:
+                logger.info(f"Radial Discovery matched {len(relevant_skills)} experts for: '{query[:50]}...'")
+                
+            return relevant_skills
 
         except Exception as e:
-            logger.error(f"Error orchestrating skills: {e}")
+            logger.error(f"Radial Discovery failed: {e}")
             return []
-
-    async def fetch_skill_content(self, skill_id: str) -> str | None:
-        """Fetches the actual skill instructions (content) from the database."""
-        skill = next((s for s in self.skills_index if s["id"] == skill_id), None)
-        if not skill:
-            return None
-
-        # Content is already part of the initial fetch in this version.
-        # If skills grow very large, we can optimize this to only fetch content on-demand.
-        return skill.get("content")
 
     async def get_orchestration_prompt(self, query: str) -> str:
-        """Generates a combined prompt block containing relevant skills from Supabase."""
+        """
+        Generates the 'Expert Injection' block for the system prompt.
+        Lazy-routes the most relevant skill instructions into the active context.
+        """
         relevant_skills = await self.get_relevant_skills(query)
         if not relevant_skills:
             return ""
 
-        prompt_parts = ["\n### SPECIALIZED SKILLS & EXPERT ROLES INJECTED\n"]
+        prompt_parts = ["\n### ⚡ NEXUS EXPERT ORCHESTRATION: RADIAL DISCOVERY ACTIVE\n"]
+        prompt_parts.append("CRITICAL OVERRIDE: The following specialized expert roles have been dynamically injected based on the user's intent. YOU MUST BEGIN your response by introducing yourself as this expert persona. YOU MUST COMPLETELY ADOPT THEIR PERSONA, TONE, AND EXPERTISE. Do NOT drop character. You are no longer a general assistant—you are exactly this expert.\n")
 
-        # In this version, content is already pre-loaded in load_database_skills
         for skill in relevant_skills:
-            content = skill.get("content")
-            if content:
-                role = skill.get("role", "Expert Analyst")
-                expertise = ", ".join(skill.get("expertise", []))
+            role = skill.get("role", "Expert Consultant")
+            name = skill.get("name", "Specialized Agent")
+            expertise = ", ".join(skill.get("expertise", []))
+            content = skill.get("content", "")
 
-                parts = [
-                    f"#### [Agent: {role}]",
-                    f"**Expertise**: {expertise}" if expertise else "",
-                    content,
-                    "---",
-                ]
-                prompt_parts.append("\n".join([p for p in parts if p]))
+            parts = [
+                f"#### [Agent: {name} | Role: {role}]",
+                f"**Technical Expertise**: {expertise}" if expertise else "",
+                "**Expert Instructions**:",
+                content,
+                "\n---"
+            ]
+            prompt_parts.append("\n".join([p for p in parts if p]))
 
         return "\n".join(prompt_parts)
+
+    async def get_skill_by_id(self, skill_id: str) -> Dict[str, Any] | None:
+        """Directly retrieves a specific skill's instructions/payload by its unique ID."""
+        try:
+            # We use name-based UUIDs for stable lookups.
+            import uuid
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"nexus.skills.{skill_id}"))
+            
+            result = self.qdrant_client.retrieve(
+                collection_name=self.collection_name,
+                ids=[point_id],
+                with_payload=True,
+                with_vectors=False
+            )
+            
+            if result:
+                return result[0].payload
+            return None
+        except Exception as e:
+            logger.error(f"Failed to retrieve skill {skill_id}: {e}")
+            return None
+
+    async def fetch_skill_manifests(self) -> List[Dict[str, Any]]:
+        """Used by the UI to list all available capabilities in the Nexus Skill Hub."""
+        try:
+            # Scroll through existing skills (up to 100 for now)
+            points, _ = self.qdrant_client.scroll(
+                collection_name=self.collection_name,
+                limit=100,
+                with_payload=True,
+                with_vectors=False
+            )
+            return [p.payload for p in points]
+        except Exception as e:
+            logger.error(f"Failed to fetch skill manifests for UI: {e}")
+            return []
+

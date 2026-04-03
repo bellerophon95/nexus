@@ -156,6 +156,7 @@ jobs:
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
         run: |
           DC_B64=$(base64 -w 0 docker-compose.prod.yml)
           CF_B64=$(base64 -w 0 Caddyfile)
@@ -176,7 +177,8 @@ jobs:
           UPSTASH_REDIS_REST_TOKEN=$UPSTASH_REDIS_REST_TOKEN
           LANGFUSE_PUBLIC_KEY=$LANGFUSE_PUBLIC_KEY
           LANGFUSE_SECRET_KEY=$LANGFUSE_SECRET_KEY
-          LANGFUSE_HOST=$LANGFUSE_HOST"
+          LANGFUSE_HOST=$LANGFUSE_HOST
+          COHERE_API_KEY=$COHERE_API_KEY"
           
           ENV_B64=$(echo "$ENV_CONTENT" | base64 -w 0)
           

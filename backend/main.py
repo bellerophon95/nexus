@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import threading
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -48,14 +49,14 @@ app.add_middleware(
 
 # Routes
 app.include_router(routes_health.router, prefix="/api", tags=["Health"])
-app.include_router(routes_ingest.router, prefix="/api", tags=["Ingestion"])
-app.include_router(routes_search.router, prefix="/api", tags=["Search"])
-app.include_router(routes_agents.router, prefix="/api", tags=["Agents"])
-app.include_router(routes_query.router, prefix="/api", tags=["Streaming"])
+app.include_router(routes_ingest.router, prefix="/api/ingest", tags=["Ingestion"])
+app.include_router(routes_search.router, prefix="/api/search", tags=["Search"])
+app.include_router(routes_agents.router, prefix="/api/agents", tags=["Agents"])
+app.include_router(routes_query.router, prefix="/api/streaming", tags=["Streaming"])
 app.include_router(routes_documents.router, prefix="/api/documents", tags=["Documents"])
-app.include_router(routes_history.router, prefix="/api", tags=["History"])
-app.include_router(routes_tasks.router, prefix="/api", tags=["Tasks"])
-app.include_router(routes_skills.router, prefix="/api", tags=["Skills"])
+app.include_router(routes_history.router, prefix="/api/history", tags=["History"])
+app.include_router(routes_tasks.router, prefix="/api/tasks", tags=["Tasks"])
+app.include_router(routes_skills.router, prefix="/api/skills", tags=["Skills"])
 
 
 @app.on_event("startup")
@@ -83,17 +84,27 @@ async def startup_event():
     # Warm up NLP models (Presidio, etc.) in background to avoid blocking health checks
     asyncio.create_task(warmup_guardrails())
 
-    # 2. Start Background Ingestion Worker
-    from backend.ingestion.worker import run_worker_loop
+    # 2. Start Background Ingestion Worker & Reaper in dedicated threads
+    from backend.ingestion.worker import run_worker_thread
+    from backend.ingestion.reaper import run_reaper_loop
+    
+    t1 = threading.Thread(target=run_worker_thread, daemon=True)
+    t1.start()
+    
+    t2 = threading.Thread(target=run_reaper_loop, daemon=True)
+    t2.start()
 
-    asyncio.create_task(run_worker_loop())
-
-    logger.info(f"Nexus Backend started in {settings.ENV} mode (Asynchronous NLP Loading)")
+    logger.info(f"Nexus Backend started in {settings.ENV} mode (Dedicated Ingestion Worker & Reaper Threads)")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     print(f"Shutting down {settings.APP_NAME}")
+    # Clean shutdown of the NLP executor
+    from backend.ingestion.worker import get_nlp_executor
+    executor = get_nlp_executor()
+    executor.shutdown(wait=False, cancel_futures=True)
+    logger.info("NLP Process Pool shut down.")
 
 
 if __name__ == "__main__":

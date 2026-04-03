@@ -67,6 +67,14 @@ def init_qdrant_collection(collection_name: str = "nexus_chunks", vector_size: i
                     size=vector_size, distance=models.Distance.COSINE
                 ),
             )
+            
+            # Create payload index for document_id so deletion by document_id works correctly
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name="document_id",
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
+            logger.info(f"Created payload index on document_id for {collection_name}")
         else:
             logger.debug(f"Qdrant collection {collection_name} already exists.")
 

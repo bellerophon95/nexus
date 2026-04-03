@@ -1,5 +1,8 @@
-import asyncio
+import datetime
 import logging
+import time
+from concurrent.futures import ProcessPoolExecutor, TimeoutError
+from functools import partial
 
 from backend.cache.semantic_cache import get_semantic_cache
 from backend.database.supabase import get_supabase
@@ -7,15 +10,42 @@ from backend.ingestion.upserter import insert_chunks, upsert_document
 
 logger = logging.getLogger(__name__)
 
+_nlp_executor = None
 
-async def run_worker_loop():
+def get_nlp_executor():
+    """Lazy loader for the NLP ProcessPoolExecutor to avoid 'spawn' deadlocks."""
+    global _nlp_executor
+    if _nlp_executor is None:
+        logger.info("Initializing NLP Process Pool (max_workers=1)...")
+        _nlp_executor = ProcessPoolExecutor(max_workers=1)
+    return _nlp_executor
+
+
+def _mark_task_error(supabase, task_id: str, message: str):
     """
-    Continuous background loop that processes pending ingestion chunks in batches.
-    Uses an atomic RPC function to claim chunks and avoid race conditions.
+    Helper to mark a task as error in Supabase.
     """
-    logger.info("Nexus Ingestion Worker: Process Started.")
+    try:
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        supabase.table("ingestion_tasks").update({
+            "status": "error",
+            "message": message,
+            "updated_at": now_iso
+        }).eq("id", task_id).execute()
+        logger.error(f"Task {task_id} marked as error: {message}")
+    except Exception as e:
+        logger.error(f"Failed to mark task {task_id} as error: {e}")
+
+
+def run_worker_loop():
+    """
+    Continuous background loop (Synchronous Thread) that processes pending chunks.
+    Using a standard thread avoids asyncio event-loop conflicts on macOS.
+    """
+    global _nlp_executor
+    logger.info("Nexus Ingestion Worker: Thread Started.")
     supabase = get_supabase()
-    BATCH_SIZE = 10  # Optimal for balancing throughput and memory
+    BATCH_SIZE = 10 
 
     while True:
         try:
@@ -25,11 +55,11 @@ async def run_worker_loop():
             ).execute()
 
             if not rpc_response.data or len(rpc_response.data) == 0:
-                await asyncio.sleep(3)  # Wait for new work
+                time.sleep(5)  # Wait for new work
                 continue
 
             claimed_chunks = rpc_response.data
-            logger.info(f"Worker: Claimed {len(claimed_chunks)} chunks for processing.")
+            logger.info(f"Worker Heartbeat: Claimed {len(claimed_chunks)} chunks (Processing batch...)")
 
             # 2. Prepare for batch processing
             # We group by task_id to handle multiple documents arriving at once
@@ -49,7 +79,44 @@ async def run_worker_loop():
 
             from backend.ingestion.pipeline import process_chunks_batch
 
-            processed_results = process_chunks_batch(all_chunk_payloads)
+            # Signal activity by updating the task heartbeat before starting models
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            for t_id in tasks_to_update.keys():
+                supabase.table("ingestion_tasks").update({"updated_at": now_iso}).eq("id", t_id).execute()
+
+            logger.info("Worker: Handoff batch to NLP Process Pool...")
+            try:
+                # Use the executor to run the batch processing in a separate process
+                # We block the thread here, which is fine since it's a dedicated worker thread.
+                # Wrap in timeout to prevent indefinite hangs
+                try:
+                    executor = get_nlp_executor()
+                    future = executor.submit(process_chunks_batch, all_chunk_payloads)
+                    processed_results = future.result(timeout=120)  # 2 minute timeout per batch
+                    logger.info("Worker: NLP Process Pool completed successfully.")
+                except (RuntimeError, BrokenPipeError):
+                    logger.warning("Worker: NLP Executor crashed or broken. Recreating and retrying once...")
+                    if _nlp_executor:
+                        _nlp_executor.shutdown(wait=False, cancel_futures=True)
+                        _nlp_executor = None
+                    executor = get_nlp_executor()
+                    future = executor.submit(process_chunks_batch, all_chunk_payloads)
+                    processed_results = future.result(timeout=120)
+                
+            except TimeoutError:
+                logger.error(f"Worker: NLP batch timed out after 120s. Marking affected tasks as error.")
+                # We can't easily kill the stuck process without restarting the executor
+                if _nlp_executor:
+                    _nlp_executor.shutdown(wait=False, cancel_futures=True)
+                    _nlp_executor = None
+                for t_id in tasks_to_update.keys():
+                    _mark_task_error(supabase, t_id, "Inference engine timed out (120s). Resource exhaustion or complex document structure.")
+                continue # Skip to next batch
+            except Exception as e:
+                logger.error(f"Worker: NLP Process Pool fatal crash: {e}")
+                for t_id in tasks_to_update.keys():
+                    _mark_task_error(supabase, t_id, f"Core processing engine failed: {str(e)[:200]}")
+                continue
 
             # Map processed results back to original chunks
             for i, chunk in enumerate(claimed_chunks):
@@ -154,18 +221,33 @@ async def run_worker_loop():
                         )
                         get_semantic_cache().invalidate_for_documents([final_doc_id])
 
-                    supabase.table("ingestion_tasks").update(update_data).eq(
-                        "id", task_id
-                    ).execute()
+                    # Retry Task Update (Max 3 attempts)
+                    for attempt in range(1, 4):
+                        try:
+                            supabase.table("ingestion_tasks").update(update_data).eq(
+                                "id", task_id
+                            ).execute()
+                            logger.info(f"Worker Progress: {update_data['progress']:.1f}% for task {task_id}")
+                            break
+                        except Exception as inner_e:
+                            if attempt == 3:
+                                raise inner_e
+                            logger.warning(f"Task update attempt {attempt} failed: {inner_e}. Retrying...")
+                            time.sleep(1)
 
                 except Exception as e:
                     logger.error(f"Failed to finalise a sub-batch for task {task_id}: {e}")
 
         except Exception as e:
             logger.error(f"Ingestion Worker Loop Error: {e}")
-            await asyncio.sleep(5)
+            time.sleep(5)
+
+
+def run_worker_thread():
+    """Entry point for the background thread."""
+    logging.basicConfig(level=logging.INFO)
+    run_worker_loop()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(run_worker_loop())
+    run_worker_thread()

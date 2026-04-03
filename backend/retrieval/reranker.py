@@ -1,31 +1,37 @@
 import logging
 from typing import Any
 
-from sentence_transformers import CrossEncoder
+import cohere
 
+from backend.config import settings
 from backend.observability.tracing import observe
 
 logger = logging.getLogger(__name__)
 
-# Global variable for lazy initialization
-_model = None
+# Global lazy client
+_cohere_client = None
 
 
+def get_cohere_client() -> cohere.Client | None:
+    """
+    Lazy loader for Cohere client.
+    Returns None if COHERE_API_KEY is not configured, which triggers a graceful fallback.
+    """
+    global _cohere_client
+    if _cohere_client is None:
+        if not settings.COHERE_API_KEY:
+            logger.warning("COHERE_API_KEY not set — reranking will be skipped.")
+            return None
+        _cohere_client = cohere.Client(api_key=settings.COHERE_API_KEY)
+        logger.info("Cohere rerank client initialized.")
+    return _cohere_client
+
+
+# Keep get_model() as a no-op stub so input_guard warmup_guardrails() doesn't break.
+# Previously warmed up the SentenceTransformer CrossEncoder — now a safe no-op.
 def get_model():
-    """
-    Lazy loader for SentenceTransformers CrossEncoder.
-    """
-    global _model
-    if _model is None:
-        model_name = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-        logger.info(f"Loading Cross-Encoder model: {model_name}")
-        try:
-            _model = CrossEncoder(model_name)
-            logger.info("Cross-Encoder model loaded successfully.")
-        except Exception as e:
-            logger.error(f"Failed to load Cross-Encoder model: {e}")
-            _model = None
-    return _model
+    """Stub retained for backwards compatibility with warmup_guardrails()."""
+    return None
 
 
 @observe()
@@ -33,30 +39,53 @@ def rerank_results(
     query: str, chunks: list[dict[str, Any]], top_k: int = 10
 ) -> list[dict[str, Any]]:
     """
-    Reranks a list of retrieved chunks using a Cross-Encoder for higher precision.
+    Reranks a list of retrieved chunks using Cohere Rerank API (rerank-english-v3.0).
+    Falls back to original order if the API is unavailable or key is missing.
+    Cost: ~$1 per 1,000 calls (significantly cheaper than running a local CrossEncoder).
     """
-    model = get_model()
-    if not chunks or model is None:
+    if not chunks:
+        return []
+
+    client = get_cohere_client()
+
+    # Graceful fallback: if no client (key missing or error), return top_k by original score
+    if client is None:
+        logger.warning("Cohere client unavailable — returning top_k by original vector score.")
         return chunks[:top_k]
 
-    # Prepare pairs for cross-encoder (Query, [Title + Text])
-    pairs = []
-    for chunk in chunks:
-        # Check both top-level (if flattened by searcher) and nested metadata
-        title = chunk.get("title") or chunk.get("metadata", {}).get("title", "Unknown")
-        title_prefix = f"Document: {title}\n"
-        content = f"{title_prefix}Text: {chunk['text']}"
-        pairs.append([query, content])
+    try:
+        # Prepare documents for Cohere — include title for richer signal
+        documents = []
+        for chunk in chunks:
+            title = chunk.get("title") or chunk.get("metadata", {}).get("title", "")
+            text = chunk.get("text", "")
+            doc = f"{title}\n{text}".strip() if title else text
+            documents.append(doc)
 
-    # Predict relevance scores
-    scores = model.predict(pairs)
+        response = client.rerank(
+            model="rerank-english-v3.0",
+            query=query,
+            documents=documents,
+            top_n=top_k,
+            return_documents=False,  # We already have the docs, just need scores
+        )
 
-    # Add scores back to chunks
-    for i, chunk in enumerate(chunks):
-        chunk["rerank_score"] = float(scores[i])
+        # Map Cohere's ordered results back to our chunk dicts
+        reranked = []
+        for result in response.results:
+            chunk = chunks[result.index].copy()
+            chunk["rerank_score"] = result.relevance_score
+            reranked.append(chunk)
 
-    # Sort by rerank score descending
-    reranked = sorted(chunks, key=lambda x: x["rerank_score"], reverse=True)
+        logger.info(
+            f"Cohere rerank: {len(chunks)} → top {len(reranked)} "
+            f"(top score: {reranked[0]['rerank_score']:.3f})"
+        )
+        return reranked
 
-    # Return top K
-    return reranked[:top_k]
+    except cohere.errors.TooManyRequestsError:
+        logger.warning("Cohere rate limit hit — falling back to vector score ordering.")
+        return chunks[:top_k]
+    except Exception as e:
+        logger.error(f"Cohere rerank failed: {e} — falling back to vector score ordering.")
+        return chunks[:top_k]

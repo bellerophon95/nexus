@@ -199,11 +199,11 @@ export function SkillHub({ selectedSkills, onToggleSkill }: SkillHubProps) {
           </div>
           <div className="flex items-center gap-1.5">
              <Package className="h-3 w-3" />
-             Antigravity SDK v1.2
+             Nexus SDK v1.2
           </div>
         </div>
         <a 
-          href="https://github.com/sickn33/antigravity-awesome-skills" 
+          href="https://github.com/sickn33/nexus-awesome-skills" 
           target="_blank" 
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-blue-400 transition-colors font-bold uppercase tracking-widest"

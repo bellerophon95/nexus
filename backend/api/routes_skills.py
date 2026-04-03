@@ -19,31 +19,45 @@ def get_orchestrator():
     return _orchestrator
 
 
-@router.get("/skills/index", tags=["Skills"])
+@router.get("/index", tags=["Skills"])
 async def get_skills_index(orchestrator: SkillOrchestrator = Depends(get_orchestrator)):
-    """Returns the full index of available skills from the Supabase registry."""
-    await orchestrator.load_database_skills()
+    """Returns the full index of available skills and pre-configured bundles from Qdrant."""
+    skills = await orchestrator.fetch_skill_manifests()
+    
+    # Define strategic bundles for the UI
+    bundles = {
+        "Deep Research": ["researcher", "financial_analyst"],
+        "Production Readiness": ["agent_code_quality", "researcher"],
+        "Financial Expert": ["financial_analyst"]
+    }
+    
     return {
-        "skills": orchestrator.skills_index,
-        "count": len(orchestrator.skills_index),
+        "skills": skills,
+        "bundles": bundles,
+        "count": len(skills),
     }
 
 
-@router.post("/skills/orchestrate", tags=["Skills"])
+@router.post("/orchestrate", tags=["Skills"])
 async def orchestrate_skills(
     query: str, orchestrator: SkillOrchestrator = Depends(get_orchestrator)
 ):
-    """Determines relevant skills for a query and returns their metadata."""
+    """Performs semantic 'Radial Discovery' for a query and returns relevant expert roles."""
     relevant = await orchestrator.get_relevant_skills(query)
     return {"relevant_skills": relevant}
 
 
-@router.get("/skills/content/{skill_id}", tags=["Skills"])
+@router.get("/content/{skill_id}", tags=["Skills"])
 async def get_skill_content(
     skill_id: str, orchestrator: SkillOrchestrator = Depends(get_orchestrator)
 ):
-    """Fetches the actual SKILL.md content for a given skill ID."""
-    content = await orchestrator.fetch_skill_content(skill_id)
-    if not content:
-        raise HTTPException(status_code=404, detail="Skill content not found")
-    return {"skill_id": skill_id, "content": content}
+    """Fetches the actual instruction set (payload) for a given skill ID from Qdrant."""
+    skill = await orchestrator.get_skill_by_id(skill_id)
+    if not skill or "content" not in skill:
+        raise HTTPException(status_code=404, detail=f"Skill '{skill_id}' content not found in vector index")
+    
+    return {
+        "skill_id": skill_id, 
+        "content": skill["content"],
+        "meta": {k: v for k, v in skill.items() if k != "content"}
+    }

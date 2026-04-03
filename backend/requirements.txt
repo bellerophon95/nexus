@@ -30,14 +30,12 @@ pandas
 simhash
 yake
 
-# Hybrid/ML Tier (Conflict Prone)
-# These are kept unpinned to allow pip to find compatible wheels 
-# while we force numpy/scipy alignment in Docker
+# Hybrid/ML Tier
+# NOTE: torch + sentence-transformers removed — reranking now uses Cohere Rerank API.
+# This saves ~1-2GB Docker image size and ~700MB RAM at runtime on the EC2 instance.
 langfuse==2.57.12
 ragas==0.1.21
-torch
-transformers
-sentence-transformers
+cohere>=5.0.0
 tiktoken
 presidio-analyzer
 presidio-anonymizer
