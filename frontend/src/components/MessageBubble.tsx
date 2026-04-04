@@ -40,6 +40,8 @@ interface MessageBubbleProps {
   }[];
   onCitationClick?: (id: number) => void;
   onFeedback?: (messageId: string, score: number) => void;
+  onSelect?: () => void;
+  isSelected?: boolean;
 }
 
 export function MessageBubble({ 
@@ -50,7 +52,9 @@ export function MessageBubble({
   metrics,
   agentSteps,
   onCitationClick, 
-  onFeedback 
+  onFeedback,
+  onSelect,
+  isSelected
 }: MessageBubbleProps) {
   const isUser = role.toLowerCase() === "user";
   const [showTrace, setShowTrace] = React.useState(false);
@@ -63,9 +67,11 @@ export function MessageBubble({
 
   return (
     <div
+      onClick={onSelect}
       className={cn(
-        "group mb-8 flex w-full max-w-3xl gap-4",
-        isUser ? "ml-auto flex-row-reverse" : "mr-auto"
+        "group mb-8 flex w-full max-w-3xl gap-4 cursor-pointer transition-all duration-300",
+        isUser ? "ml-auto flex-row-reverse" : "mr-auto",
+        isSelected && !isUser && "scale-[1.02] -translate-y-1"
       )}
     >
       <div
@@ -128,7 +134,10 @@ export function MessageBubble({
             "inline-block rounded-2xl px-5 py-3 shadow-lg transition-all duration-300",
             isUser
               ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white"
-              : "bg-slate-900/80 text-slate-100 backdrop-blur-xl border border-slate-800/50 hover:border-blue-500/30"
+              : cn(
+                  "bg-slate-900/80 text-slate-100 backdrop-blur-xl border border-slate-800/50 hover:border-blue-500/30",
+                  isSelected && "border-blue-500/50 bg-blue-500/5 shadow-blue-500/10 ring-1 ring-blue-500/20"
+                )
           )}
         >
           <ReactMarkdown

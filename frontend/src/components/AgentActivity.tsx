@@ -9,6 +9,7 @@ export interface AgentStep {
   tool: string;
   status: "running" | "completed" | "error";
   timestamp: Date;
+  rationale?: string;
 }
 
 interface AgentActivityProps {
@@ -55,18 +56,32 @@ export function AgentActivity({ steps }: AgentActivityProps) {
                 )}
               </div>
 
-              <div className="space-y-1 overflow-hidden">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                    {step.agent}
-                  </span>
-                  <span className="text-[8px] text-slate-600">
-                    {step.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                  </span>
+              <div className="flex-1 space-y-2 overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                      {step.agent}
+                    </span>
+                    <span className="text-[8px] text-slate-600">
+                      {step.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-xs font-medium text-slate-300 line-clamp-2">
-                  {step.tool}
-                </p>
+                
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-slate-200">
+                    {step.tool}
+                  </p>
+                  
+                  {step.rationale && (
+                    <div className="rounded-md bg-slate-900/50 p-2 border border-slate-800/50">
+                      <p className="text-[10px] font-bold text-blue-400/80 uppercase tracking-tighter mb-1 select-none">Rationale</p>
+                      <p className="text-[11px] leading-relaxed text-slate-400 italic">
+                        {step.rationale}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {step.status === "running" && (

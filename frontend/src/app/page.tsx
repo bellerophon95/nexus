@@ -33,11 +33,13 @@ import { useEffect } from "react";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"chat" | "library" | "settings">("chat");
-  const [citations, setCitations] = useState<any[]>([]);
-  const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
-  const [metrics, setMetrics] = useState<ChatMetrics | null>(null);
-  const [isMetricsLoading, setIsMetricsLoading] = useState(false);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [selectedCitations, setSelectedCitations] = useState<any[]>([]);
+  const [selectedAgentSteps, setSelectedAgentSteps] = useState<AgentStep[]>([]);
+  const [selectedMetrics, setSelectedMetrics] = useState<ChatMetrics | null>(null);
+  const [activeRole, setActiveRole] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMetricsLoading, setIsMetricsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [refreshHistoryTrigger, setRefreshHistoryTrigger] = useState(0);
@@ -63,64 +65,41 @@ export default function Home() {
     setAccessTier(tier);
   }, []);
 
-  const handleAgentStep = (stepData: any) => {
-    // If we already have this tool/step, update it instead of adding a new one
-    setAgentSteps((prev) => {
-      const existingIdx = prev.findIndex(s => s.tool === stepData.tool && s.agent === stepData.agent);
+  const handleActivityUpdate = (data: { agent?: string; node?: string; tool?: string; status?: string; status_type?: string; rationale?: string }) => {
+    setSelectedAgentSteps((prev) => {
+      const agentName = data.agent || data.node || "Nexus";
+      const toolName = data.tool || data.status || "Thinking...";
+      const statusValue = (data.status === "completed" || data.status_type === "completed" ? "completed" : "running") as "completed" | "running";
+      const rationale = data.rationale;
+      
+      const existingIdx = prev.findIndex(s => s.agent === agentName && s.tool === toolName);
+      
       if (existingIdx !== -1) {
-        const updated = [...prev];
-        updated[existingIdx] = {
-          ...updated[existingIdx],
-          status: stepData.status || "completed"
+        const nextSteps = [...prev];
+        nextSteps[existingIdx] = {
+          ...nextSteps[existingIdx],
+          status: statusValue,
+          rationale: rationale || nextSteps[existingIdx].rationale
         };
-        return updated;
+        return nextSteps;
       }
       
-      const newStep: AgentStep = {
-        id: Math.random().toString(36).substr(2, 9),
-        agent: stepData.agent || "System",
-        tool: stepData.tool || "Processing...",
-        status: stepData.status || "completed",
+      return [...prev, {
+        id: Math.random().toString(36).substring(2, 11),
+        agent: agentName,
+        tool: toolName,
+        status: statusValue,
         timestamp: new Date(),
-      };
-      return [newStep, ...prev];
-    });
-  };
-
-  const handleActivity = (activityData: any) => {
-    const newStep: AgentStep = {
-      id: Math.random().toString(36).substr(2, 9),
-      agent: activityData.node || "Agent",
-      node: activityData.node,
-      tool: activityData.status || "Thinking...",
-      status: activityData.status_type || "running",
-      timestamp: new Date(),
-    };
-
-    setAgentSteps((prev) => {
-      // Find latest step for this node
-      const existingIdx = prev.findIndex(s => s.node === newStep.node);
-      
-      if (existingIdx !== -1) {
-        const updated = [...prev];
-        // If it was already completed, don't revert to running unless it's a new task
-        // For simplicity: replace the first occurrence of this node's activity
-        updated[existingIdx] = {
-          ...updated[existingIdx],
-          tool: newStep.tool,
-          status: newStep.status,
-          timestamp: newStep.timestamp
-        };
-        return updated;
-      }
-      
-      return [newStep, ...prev];
+        rationale: rationale,
+      }];
     });
   };
 
   const clearState = () => {
-    setCitations([]);
-    setAgentSteps([]);
+    setSelectedCitations([]);
+    setSelectedAgentSteps([]);
+    setSelectedMetrics(null);
+    setSelectedMessageId(null);
   };
 
   const handleSelectConversation = async (id: string) => {
@@ -274,21 +253,36 @@ export default function Home() {
                   <ChatInterface 
                     conversationId={conversationId}
                     initialMessages={initialMessages}
+                    selectedMessageId={selectedMessageId}
                     onConversationCreated={(id) => {
                       setConversationId(id);
                       setRefreshHistoryTrigger(prev => prev + 1);
                     }}
-                    onAgentStep={handleAgentStep}
-                    onActivity={handleActivity}
+                    onMessageSelect={(msg: Message) => {
+                      setSelectedMessageId(msg.id || null);
+                      setSelectedCitations(msg.citations || []);
+                      // Map the internal Message agentSteps to the richer AgentActivity type
+                      const mappedSteps = (msg.agentSteps || []).map((step: any, i: number) => ({
+                        id: step.id || `${msg.id}-${i}`,
+                        agent: step.agent || "Agent",
+                        tool: step.tool || "Processing...",
+                        status: step.status || "completed",
+                        timestamp: step.timestamp ? new Date(step.timestamp) : new Date(),
+                      }));
+                      setSelectedAgentSteps(mappedSteps as AgentStep[]);
+                      setSelectedMetrics(msg.metrics as any);
+                    }}
+                    onAgentStep={handleActivityUpdate}
+                    onActivity={handleActivityUpdate}
                     onCitationsUpdate={(c) => {
-                      setCitations(c);
+                      setSelectedCitations(c);
                     }}
                     onMetricsUpdate={(m) => {
-                      setMetrics(m);
+                      setSelectedMetrics(m);
                       setIsMetricsLoading(false);
                     }}
                     onLoadingStart={() => {
-                      setMetrics(null);
+                      setSelectedMetrics(null);
                       setIsMetricsLoading(true);
                       clearState();
                     }}
@@ -303,15 +297,15 @@ export default function Home() {
                           <Library className="h-4 w-4 text-blue-400" />
                           <span className="text-sm font-bold uppercase tracking-tight">Citations & Logic</span>
                        </div>
-                       {citations.length === 0 ? (
+                       {selectedCitations.length === 0 ? (
                          <div className="rounded-xl border border-dashed border-slate-800 p-8 text-center bg-slate-900/40">
                             <Layers className="h-6 w-6 text-slate-700 mx-auto mb-2" />
-                            <p className="text-[10px] text-slate-500 italic max-w-xs mx-auto">
-                              Metadata for synthesized claims will appear here once aswer generation is complete
-                            </p>
+                             <p className="text-[10px] text-slate-500 italic max-w-xs mx-auto">
+                               Metadata for synthesized claims will appear here once answer generation is complete
+                             </p>
                          </div>
                        ) : (
-                         citations.map((cit) => (
+                         selectedCitations.map((cit) => (
                            <div key={cit.id} id={`citation-${cit.id}`}>
                               <CitationCard 
                                 id={cit.id} 
@@ -325,16 +319,15 @@ export default function Home() {
                        )}
                        
                        <Separator className="bg-slate-800 my-4" />
-                       
                        <div className="rounded-xl overflow-hidden shadow-2xl">
-                          <AgentActivity steps={agentSteps} />
-                       </div>
+                           <AgentActivity steps={selectedAgentSteps} />
+                        </div>
                     </div>
                   </div>
                </aside>
             </div>
             
-            <MetricsPanel metrics={metrics} isLoading={isMetricsLoading} />
+            <MetricsPanel metrics={selectedMetrics} isLoading={isMetricsLoading} />
           </div>
         ) : activeTab === "library" ? (
           <KnowledgeHub 

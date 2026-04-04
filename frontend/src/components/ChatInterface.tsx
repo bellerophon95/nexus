@@ -23,6 +23,7 @@ export interface AgentStep {
   agent: string;
   tool: string;
   status: "running" | "completed" | "error";
+  rationale?: string;
 }
 
 export interface Message {
@@ -53,6 +54,8 @@ interface ChatInterfaceProps {
   conversationId?: string | null;
   initialMessages?: Message[];
   onConversationCreated?: (id: string) => void;
+  onMessageSelect?: (message: Message) => void;
+  selectedMessageId?: string | null;
 }
 
 export function ChatInterface({ 
@@ -62,13 +65,15 @@ export function ChatInterface({
   onActivity,
   onMetricsUpdate,
   onLoadingStart,
-  conversationId: initialConvId,
+  conversationId: propConversationId,
   initialMessages = [],
-  onConversationCreated
+  onConversationCreated,
+  onMessageSelect,
+  selectedMessageId
 }: ChatInterfaceProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
-  const [conversationId, setConversationId] = useState<string | null>(initialConvId || null);
+  const [conversationId, setConversationId] = useState<string | null>(propConversationId || null);
   const [isLoading, setIsLoading] = useState(false);
   
   // Tuning parameters
@@ -89,17 +94,20 @@ export function ChatInterface({
   }, [messages]);
 
   useEffect(() => {
-    if (initialConvId !== conversationId) {
-      setConversationId(initialConvId || null);
+    // Sync external thread changes to local state
+    if (propConversationId !== conversationId) {
+      setConversationId(propConversationId || null);
+      setMessages(initialMessages || []);
+      lastSyncedConvId.current = propConversationId;
     }
-  }, [initialConvId]);
+  }, [propConversationId, initialMessages]);
 
   useEffect(() => {
     // Determine if we should perform a full synchronization from properties.
     // We skip sync if we are currently loading/streaming to prevent overwriting the active response.
     // We also skip if initialConvId is null (as this indicates a new thread interaction).
-    const isChangingThread = initialConvId !== null && initialConvId !== lastSyncedConvId.current;
-    const needsInitialLoading = initialConvId !== null && messages.length === 0 && initialMessages.length > 0;
+    const isChangingThread = propConversationId !== null && propConversationId !== lastSyncedConvId.current;
+    const needsInitialLoading = propConversationId !== null && messages.length === 0 && initialMessages.length > 0;
     const shouldSync = !isLoading && (isChangingThread || needsInitialLoading);
 
     if (shouldSync) {
@@ -109,19 +117,15 @@ export function ChatInterface({
         citations: msg.citations || (msg as any).citations
       }));
       setMessages(normalized);
-      lastSyncedConvId.current = initialConvId;
+      lastSyncedConvId.current = conversationId;
       
       // Auto-populate the sidebar with relevant data from the newly synced messages
       const lastAssistant = [...normalized].reverse().find(m => m.role.toLowerCase() === "assistant");
       if (lastAssistant) {
-        if (lastAssistant.citations) onCitationsUpdate?.(lastAssistant.citations);
-        if (lastAssistant.agentSteps) {
-          lastAssistant.agentSteps.forEach((step: AgentStep) => onAgentStep?.(step));
-        }
-        if (lastAssistant.metrics) onMetricsUpdate?.(lastAssistant.metrics);
+        onMessageSelect?.(lastAssistant);
       }
     }
-  }, [initialMessages, initialConvId, isLoading]);
+  }, [initialMessages, conversationId, isLoading]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -132,7 +136,13 @@ export function ChatInterface({
     setIsLoading(true);
     onLoadingStart?.();
 
-    const assistantMessage: Message = { role: "assistant", content: "" };
+    const assistantMessage: Message = { 
+      role: "assistant", 
+      content: "", 
+      agentSteps: [], 
+      citations: [],
+      metrics: { latency: 0, tokens: 0, cost: 0 }
+    };
     setMessages((prev) => [...prev, assistantMessage]);
 
     // Close any existing connection
@@ -151,16 +161,25 @@ export function ChatInterface({
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
 
+    // Reset current selection to the new streaming assistant message
+    onMessageSelect?.(assistantMessage);
+
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         
-        if (data.type === "tokens") {
+        if (data.type === "tokens" || data.type === "token") {
           setMessages((prev) => {
+            if (prev.length === 0) return prev;
             const newMessages = [...prev];
-            const lastMessage = newMessages[newMessages.length - 1];
+            const lastIdx = newMessages.length - 1;
+            const lastMessage = newMessages[lastIdx];
+            
             if (lastMessage && lastMessage.role === "assistant") {
-              lastMessage.content += data.content;
+              newMessages[lastIdx] = {
+                ...lastMessage,
+                content: lastMessage.content + data.content
+              };
             }
             return newMessages;
           });
@@ -169,48 +188,84 @@ export function ChatInterface({
             onAgentStep?.({
               agent: data.agent,
               tool: data.tool,
-              status: data.status
+              status: data.status,
+              rationale: data.rationale
             });
           } else {
             onActivity?.(data);
           }
           
           setMessages((prev) => {
+            if (prev.length === 0) return prev;
             const newMessages = [...prev];
-            const lastMessage = newMessages[newMessages.length - 1];
+            const lastIdx = newMessages.length - 1;
+            const lastMessage = newMessages[lastIdx];
+            
             if (lastMessage && lastMessage.role === "assistant") {
-              const steps = lastMessage.agentSteps || [];
+              const currentSteps = lastMessage.agentSteps || [];
               const agent = data.agent || data.node || "Agent";
               const tool = data.tool || data.status || "Thinking...";
               const status = data.status === "completed" || data.status_type === "completed" ? "completed" : "running";
               
-              const existingIdx = steps.findIndex(s => s.agent === agent && s.tool === tool);
+              const existingIdx = currentSteps.findIndex(s => s.agent === agent && s.tool === tool);
+              let nextSteps;
+              
               if (existingIdx !== -1) {
-                steps[existingIdx] = { ...steps[existingIdx], status: status as any };
+                nextSteps = [...currentSteps];
+                nextSteps[existingIdx] = { 
+                  ...nextSteps[existingIdx], 
+                  status: status as any, 
+                  rationale: data.rationale || nextSteps[existingIdx].rationale 
+                };
               } else {
-                steps.push({ agent, tool, status: status as any });
+                nextSteps = [...currentSteps, { 
+                  agent, 
+                  tool, 
+                  status: status as any, 
+                  rationale: data.rationale 
+                }];
               }
-              lastMessage.agentSteps = [...steps];
+              
+              newMessages[lastIdx] = {
+                ...lastMessage,
+                agentSteps: nextSteps
+              };
             }
             return newMessages;
           });
         } else if (data.type === "metrics") {
-          onMetricsUpdate?.(data.metrics);
+          // data can be {type: 'metrics', metrics: {...}} or flat {type: 'metrics', latency: ...}
+          const metricsPayload = data.metrics || data;
+          onMetricsUpdate?.(metricsPayload);
+          
           setMessages((prev) => {
+            if (prev.length === 0) return prev;
             const newMessages = [...prev];
-            const lastMessage = newMessages[newMessages.length - 1];
+            const lastIdx = newMessages.length - 1;
+            const lastMessage = newMessages[lastIdx];
+            
             if (lastMessage && lastMessage.role === "assistant") {
-              lastMessage.metrics = data.metrics;
+              newMessages[lastIdx] = {
+                ...lastMessage,
+                metrics: metricsPayload
+              };
             }
             return newMessages;
           });
         } else if (data.type === "citations") {
-          onCitationsUpdate?.(data.citations);
+          const citations = data.citations || [];
+          onCitationsUpdate?.(citations);
           setMessages((prev) => {
+            if (prev.length === 0) return prev;
             const newMessages = [...prev];
-            const lastMessage = newMessages[newMessages.length - 1];
+            const lastIdx = newMessages.length - 1;
+            const lastMessage = newMessages[lastIdx];
+            
             if (lastMessage && lastMessage.role === "assistant") {
-              lastMessage.citations = data.citations;
+              newMessages[lastIdx] = {
+                ...lastMessage,
+                citations: citations
+              };
             }
             return newMessages;
           });
@@ -218,14 +273,25 @@ export function ChatInterface({
           const newId = data.conversation_id;
           setConversationId(newId);
           onConversationCreated?.(newId);
-          // Mark this ID as "synced" so the useEffect doesn't wipe our state when isLoading changes
           lastSyncedConvId.current = newId;
-        } else if (data.type === "completion") {
+        } else if (data.type === "completion" || data.type === "done") {
+          if (data.citations && data.citations.length > 0) {
+             onCitationsUpdate?.(data.citations);
+          }
+          
           setMessages((prev) => {
+            if (prev.length === 0) return prev;
             const newMessages = [...prev];
-            const lastMessage = newMessages[newMessages.length - 1];
+            const lastIdx = newMessages.length - 1;
+            const lastMessage = newMessages[lastIdx];
+            
             if (lastMessage && lastMessage.role === "assistant") {
-              lastMessage.id = data.message_id;
+              newMessages[lastIdx] = { 
+                ...lastMessage, 
+                id: data.message_id || lastMessage.id,
+                citations: data.citations || lastMessage.citations,
+                metrics: data.metrics || lastMessage.metrics
+              };
             }
             return newMessages;
           });
@@ -413,10 +479,12 @@ export function ChatInterface({
                 feedback={msg.feedback}
                 metrics={msg.metrics}
                 agentSteps={msg.agentSteps}
+                isSelected={msg.id === selectedMessageId || (msg.role === "assistant" && idx === messages.length - 1 && !selectedMessageId)}
                 onCitationClick={(id: string | number) => {
                    document.getElementById(`citation-${id}`)?.scrollIntoView({ behavior: 'smooth' });
                 }}
                 onFeedback={handleFeedback}
+                onSelect={() => msg.role === "assistant" && onMessageSelect?.(msg)}
               />
             ))
           )}

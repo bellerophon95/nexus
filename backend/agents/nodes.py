@@ -40,7 +40,16 @@ async def supervisor_node(state: NexusState) -> dict[str, Any]:
     # 3. Check for hard stop (Max iterations or no progress after multiple searches)
     if state["iteration_count"] >= state["max_iterations"] or state.get("search_count", 0) >= 2:
         logger.warning("Max iterations or excessive search attempts reached. Ending agent flow.")
-        return {"current_agent": "end"}
+        return {
+            "current_agent": "end",
+            "activity_log": [
+                {
+                    "node": "supervisor",
+                    "status": "Terminating",
+                    "rationale": "Max iterations or search attempts reached to avoid infinite loops.",
+                }
+            ],
+        }
 
     system_prompt = (
         "You are the Supervisor for Project Nexus. Your job is to orchestrate a multi-agent system "
@@ -79,7 +88,13 @@ async def supervisor_node(state: NexusState) -> dict[str, Any]:
 
     return {
         "current_agent": next_agent,
-        "activity_log": [{"node": "supervisor", "status": f"Routing to {next_agent}..."}],
+        "activity_log": [
+            {
+                "node": "supervisor",
+                "status": f"Routing to {next_agent}...",
+                "rationale": f"Based on context, the {next_agent} is best suited for the next step.",
+            }
+        ],
     }
 
 
@@ -105,6 +120,9 @@ async def researcher_node(state: NexusState) -> dict[str, Any]:
     # Handle tool calls
     new_chunks = []
     status_msg = "Researcher found no new information."
+    rationale = (
+        "The model did not find specific document search tool calls necessary for this query."
+    )
     search_triggered = 0
 
     if response.tool_calls:
@@ -125,17 +143,19 @@ async def researcher_node(state: NexusState) -> dict[str, Any]:
                     new_chunks.extend(valid_results)
                     if valid_results:
                         status_msg = f"Researcher gathered {len(valid_results)} new chunks from the knowledge base."
+                        rationale = f"Semantic search for '{args.get('query')}' yielded relevant document segments."
                     else:
                         status_msg = (
                             "Researcher searched but found no relevant chunks matching the query."
                         )
+                        rationale = "The knowledge base did not contain direct matches for the terms used in the search query."
 
     return {
         "retrieved_chunks": state["retrieved_chunks"] + new_chunks,
         "search_count": state.get("search_count", 0) + search_triggered,
         "messages": [AIMessage(content=status_msg)],
         "current_agent": "supervisor",
-        "activity_log": [{"node": "researcher", "status": status_msg}],
+        "activity_log": [{"node": "researcher", "status": status_msg, "rationale": rationale}],
     }
 
 
@@ -151,12 +171,26 @@ async def analyst_node(state: NexusState) -> dict[str, Any]:
         return {
             "final_answer": "Hello! I am Nexus AI. I'm ready to help you research and analyze your documents. What would you like to know?",
             "current_agent": "supervisor",  # Route to supervisor to finalize via validator or end
+            "activity_log": [
+                {
+                    "node": "analyst",
+                    "status": "Handling greeting",
+                    "rationale": "User input identified as a general greeting rather than a research query.",
+                }
+            ],
         }
 
     if not state["retrieved_chunks"]:
         return {
             "final_answer": "I'm sorry, I couldn't find any information locally related to your request. Please try broadening your search or check if the relevant documents have been uploaded.",
             "current_agent": "supervisor",
+            "activity_log": [
+                {
+                    "node": "analyst",
+                    "status": "Insufficient context",
+                    "rationale": "No relevant document chunks were found after multiple research attempts.",
+                }
+            ],
         }
 
     context_text = "\n".join(
@@ -183,7 +217,13 @@ async def analyst_node(state: NexusState) -> dict[str, Any]:
         "final_answer": response.content,
         "iteration_count": state["iteration_count"] + 1,
         "current_agent": "supervisor",
-        "activity_log": [{"node": "analyst", "status": "Drafted synthesized response."}],
+        "activity_log": [
+            {
+                "node": "analyst",
+                "status": "Drafted synthesized response.",
+                "rationale": "Synthesizing available knowledge base context to answer the user's specific query.",
+            }
+        ],
     }
 
 
@@ -220,7 +260,7 @@ async def validator_node(state: NexusState) -> dict[str, Any]:
             {
                 "node": "validator",
                 "status": f"Validation {status}: {(1 - score) * 100:.0f}% faithfulness score.",
-                "details": reasoning,
+                "rationale": reasoning,
             }
         ],
     }
