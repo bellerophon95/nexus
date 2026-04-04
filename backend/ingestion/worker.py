@@ -75,7 +75,11 @@ def run_worker_loop():
             # 3. Batch Processing (Enrich + Embed)
             # Flattened list for the pipeline
             all_chunk_payloads = [
-                {"text": c["content"], "token_count": c["metadata"]["token_count"]}
+                {
+                    "text": c["content"],
+                    "token_count": c["metadata"].get("token_count", 0),
+                    "metadata": c.get("metadata", {}),
+                }
                 for c in claimed_chunks
             ]
 

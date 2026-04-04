@@ -105,7 +105,8 @@ def process_single_chunk(chunk_text: str, token_count: int) -> dict[str, Any]:
 def process_chunks_batch(chunk_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Phase 2: Enrich and Embed a list of chunks efficiently.
-    chunk_data should be a list of dicts with 'text' and 'token_count' keys.
+    chunk_data should be a list of dicts with 'text' and 'token_count' keys,
+    and optional 'metadata' for citation preservation.
     """
     from backend.ingestion.embedder import embed_chunks_batch
     from backend.ingestion.enricher import enrich_chunks_batch
@@ -122,6 +123,7 @@ def process_chunks_batch(chunk_data: list[dict[str, Any]]) -> list[dict[str, Any
             {
                 "text": texts[i],
                 "token_count": chunk_data[i]["token_count"],
+                "metadata": chunk_data[i].get("metadata", {}),
                 "entities": batch_enrichments[i]["entities"],
                 "topics": batch_enrichments[i]["topics"],
                 "key_phrases": batch_enrichments[i]["key_phrases"],

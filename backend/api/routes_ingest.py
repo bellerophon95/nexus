@@ -55,9 +55,45 @@ def process_ingestion_task(
             return
 
         if result["status"] == "skipped":
-            supabase.table("ingestion_tasks").update(
-                {"status": "skipped", "message": "Document already exists."}
-            ).eq("id", task_id).execute()
+            # If the document is skipped because it exists, check if we need to update its sharing status
+            fingerprint = int(result["fingerprint"])
+            existing_doc = (
+                supabase.table("documents")
+                .select("id, is_personal")
+                .eq("fingerprint", fingerprint)
+                .execute()
+            )
+
+            if existing_doc.data:
+                doc_id = existing_doc.data[0]["id"]
+                current_personal = existing_doc.data[0].get("is_personal", True)
+
+                # If the user is requesting a more permissive state (Public) or just different, update it
+                if current_personal != is_personal:
+                    supabase.table("documents").update({"is_personal": is_personal}).eq(
+                        "id", doc_id
+                    ).execute()
+
+                    # Also update all chunks for this document in Supabase
+                    # Qdrant updates are harder but Supabase is the source of truth for the library view
+                    supabase.table("chunks").update({"is_personal": is_personal}).eq(
+                        "document_id", doc_id
+                    ).execute()
+
+                    logger.info(f"Updated existing document {doc_id} is_personal to {is_personal}")
+
+                supabase.table("ingestion_tasks").update(
+                    {
+                        "status": "completed",
+                        "progress": 100.0,
+                        "message": "Document already exists. Unified sharing state.",
+                        "document_id": doc_id,
+                    }
+                ).eq("id", task_id).execute()
+            else:
+                supabase.table("ingestion_tasks").update(
+                    {"status": "skipped", "message": "Document already exists."}
+                ).eq("id", task_id).execute()
             return
 
         chunks = result["chunks"]
@@ -89,6 +125,7 @@ def process_ingestion_task(
                         "token_count": chunk.token_count,
                         "fingerprint": str(result["fingerprint"]),
                         "title": result["title"],
+                        "source_path": file_path,
                     },
                     "status": "pending",
                 }
@@ -125,6 +162,7 @@ def process_ingestion_task(
                 "progress": 10.0,
                 "chunk_count": total_chunks,
                 "message": f"Queued {total_chunks} chunks for background processing.",
+                "is_personal": is_personal,  # Explicitly reinforce the column
                 "metadata": {
                     "full_text": result["full_text"],
                     "fingerprint": str(result["fingerprint"]),
@@ -151,7 +189,7 @@ def process_ingestion_task(
 async def ingest_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    is_personal: bool = Form(True),
+    is_personal: str = Form("true"),
     user_id: str = Depends(get_user_id),
     _=Depends(rate_limit_dependency),
 ):
@@ -177,7 +215,10 @@ async def ingest_document(
                 detail=f"File too large ({(size / 1024 / 1024):.1f}MB). The Free Tier limit is 5MB to prevent system instability.",
             )
 
+        # Normalize is_personal boolean from different string representation
+        is_personal_bool = str(is_personal).lower() in ("true", "1", "yes", "on")
         task_id = str(uuid.uuid4())
+
         async_supabase = await get_async_supabase()
 
         # Create temp directory
@@ -205,7 +246,7 @@ async def ingest_document(
                     "progress": 0,
                     "filename": file.filename,
                     "user_id": user_id,
-                    "is_personal": is_personal,
+                    "is_personal": is_personal_bool,
                 }
             )
             .execute()
@@ -213,7 +254,7 @@ async def ingest_document(
 
         # Add to background tasks (Runs in separate thread since process_ingestion_task is 'def')
         background_tasks.add_task(
-            process_ingestion_task, task_id, file_path, file.filename, user_id, is_personal
+            process_ingestion_task, task_id, file_path, file.filename, user_id, is_personal_bool
         )
 
         return IngestResponse(

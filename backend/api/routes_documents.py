@@ -105,10 +105,10 @@ def share_document(document_id: str):
         if not response.data:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        # 2. Propagate to chunks in Supabase (Set user_id to NULL)
+        # 2. Propagate to chunks in Supabase (Set user_id to NULL and is_personal to False)
         (
             supabase.table("chunks")
-            .update({"user_id": None})
+            .update({"user_id": None, "is_personal": False})
             .eq("document_id", document_id)
             .execute()
         )
