@@ -34,14 +34,11 @@ RUN pip install "numpy==1.26.4"
 FROM base-builder AS nlp-builder
 RUN pip install --prefix=/install/nlp \
     "spacy==3.7.5" \
-    "unstructured[pdf]==0.15.0" \
     "pypdf>=5.1.0" \
     "python-magic>=0.4.27" \
     "simhash>=2.0" \
     "yake>=0.4" \
-    "better-profanity==0.7.0" \
-    "presidio-analyzer>=2.2.351" \
-    "presidio-anonymizer>=2.2.351"
+    "better-profanity==0.7.0"
 
 # --- Stage 2c: Core API & Ecosystem Builder ---
 # Fast to build, handles all the web and data clients
