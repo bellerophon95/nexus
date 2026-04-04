@@ -1,14 +1,13 @@
 import logging
 from typing import Any
 
+from backend.guardrails.input_guard import _regex_pii_filter
 from backend.guardrails.models import GuardResult
 from backend.observability.tracing import observe
 from backend.retrieval.self_rag import check_hallucination
 
 logger = logging.getLogger(__name__)
 
-# Lazily initialize Presidio and Profanity to prevent blocking imports
-_analyzer = None
 _profanity_loaded = False
 
 # Expanded whitelist to prevent false positives with dummy text and Markdown syntax
@@ -50,19 +49,6 @@ def get_profanity():
     return profanity
 
 
-def get_analyzer():
-    """Lazy loader for Presidio AnalyzerEngine."""
-    global _analyzer
-    if _analyzer is None:
-        try:
-            from presidio_analyzer import AnalyzerEngine
-
-            _analyzer = AnalyzerEngine()
-        except Exception as e:
-            logger.error(f"Failed to initialize Presidio for output: {e}")
-    return _analyzer
-
-
 @observe(name="Output Guardrails")
 async def run_output_guardrails(
     answer: str, context_chunks: list[dict[str, Any]] = None
@@ -99,19 +85,16 @@ async def run_output_guardrails(
         except Exception as e:
             logger.error(f"Self-RAG check failed: {e}")
 
-    # 3. PII Leak Detection
+    # 3. PII Leak Detection (Regex — replaces Presidio)
     pii_types = []
     warnings = []
-    analyzer = get_analyzer()
-    if analyzer:
-        try:
-            results = analyzer.analyze(text=answer, language="en")
-            pii_types = list({res.entity_type for res in results})
-            if pii_types:
-                warnings.append(f"PII detected in response: {', '.join(pii_types)}")
-                logger.warning(f"PII Leak detected: {pii_types}")
-        except Exception as e:
-            logger.error(f"PII analysis failed in output: {e}")
+    try:
+        _, pii_types = _regex_pii_filter(answer)
+        if pii_types:
+            warnings.append(f"PII detected in response: {', '.join(pii_types)}")
+            logger.warning(f"PII Leak detected: {pii_types}")
+    except Exception as e:
+        logger.error(f"PII analysis failed in output: {e}")
 
     # Combine warnings
     hallucination_score = (

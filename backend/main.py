@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import threading
@@ -92,7 +91,6 @@ async def startup_event():
         if hasattr(route, "path"):
             logger.info(f"Registered route: {route.path}")
 
-    from backend.guardrails.input_guard import warmup_guardrails
     from backend.observability.tracing import init_tracing
 
     init_tracing()
@@ -107,8 +105,8 @@ async def startup_event():
     else:
         logger.info("All critical configuration variables are present.")
 
-    # Warm up NLP models (Presidio, etc.) in background to avoid blocking health checks
-    asyncio.create_task(warmup_guardrails())
+    # Note: Presidio warmup removed — PII detection now uses zero-RAM regex filter.
+    # Backend starts instantly with no blocking model loads.
 
     # 2. Start Background Ingestion Worker & Reaper in dedicated threads
     from backend.ingestion.reaper import run_reaper_loop

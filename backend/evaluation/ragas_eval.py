@@ -1,14 +1,15 @@
 import asyncio
 import logging
 
-from datasets import Dataset
-from ragas import evaluate
-from ragas.metrics import answer_relevancy, context_precision, context_recall, faithfulness
-
 from backend.config import settings
 from backend.observability.tracing import get_langfuse_client
 
 logger = logging.getLogger(__name__)
+
+# NOTE: ragas and datasets are intentionally NOT imported at module level.
+# They are lazy-loaded inside run_ragas_eval_sync to minimize idle RAM usage.
+# These libraries consume ~300MB+ RAM; loading only during 5% evaluation sampling
+# keeps the idle backend footprint low on the production t3.small instance.
 
 # ⚠️  DEAD CODE — NOT CALLED IN THE LIVE QUERY PATH
 # These functions are defined but never imported or invoked from routes_query.py.
@@ -26,13 +27,18 @@ def run_ragas_eval_sync(
 ) -> dict[str, float]:
     """
     Runs RAGAS evaluation and pushes scores to Langfuse.
+    Heavy imports are lazy-loaded here to avoid consuming RAM at startup.
     """
     try:
         if not settings.OPENAI_API_KEY:
             logger.error("RAGAS Evaluation failed: OPENAI_API_KEY is missing.")
             return {}
 
-        # Prepare dataset for RAGAS
+        # Lazy imports — only loaded during 5% evaluation sampling
+        from datasets import Dataset
+        from ragas import evaluate
+        from ragas.metrics import answer_relevancy, context_precision, context_recall, faithfulness
+
         data = {"question": [query], "answer": [answer], "contexts": [contexts]}
 
         metrics = [faithfulness, answer_relevancy, context_precision]

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import re
 
@@ -6,78 +5,57 @@ from backend.guardrails.models import GuardResult
 
 logger = logging.getLogger(__name__)
 
-# Global variables for lazy initialization
-_analyzer = None
-_anonymizer = None
 _profanity_loaded = False
 
+# ---------------------------------------------------------------------------
+# Regex-based PII filter — replaces Presidio (~500MB RAM) with zero-RAM patterns.
+# Covers the most common PII types: email, phone, SSN, credit cards, IPs.
+# ---------------------------------------------------------------------------
+_PII_PATTERNS: list[tuple[str, re.Pattern]] = [
+    (
+        "EMAIL_ADDRESS",
+        re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", re.IGNORECASE),
+    ),
+    ("PHONE_NUMBER", re.compile(r"(\+?1[\s\-.]?)?\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}")),
+    ("US_SSN", re.compile(r"\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b")),
+    ("CREDIT_CARD", re.compile(r"\b(?:\d[ \-]?){13,16}\b")),
+    ("IP_ADDRESS", re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")),
+]
 
-# Lazily initialize Presidio and Profanity to prevent blocking imports
-def get_analyzer():
+_PII_REDACT_MAP = {
+    "EMAIL_ADDRESS": "<EMAIL>",
+    "PHONE_NUMBER": "<PHONE>",
+    "US_SSN": "<SSN>",
+    "CREDIT_CARD": "<CREDIT_CARD>",
+    "IP_ADDRESS": "<IP>",
+}
+
+
+def _regex_pii_filter(text: str) -> tuple[str, list[str]]:
     """
-    Lazy loader for Presidio AnalyzerEngine.
+    Detects and redacts common PII using regex patterns.
+    Returns (sanitized_text, list_of_detected_pii_types).
+    Zero RAM overhead — no models loaded.
     """
-    global _analyzer
-    if _analyzer is None:
-        try:
-            from presidio_analyzer import AnalyzerEngine
-
-            _analyzer = AnalyzerEngine()
-        except Exception as e:
-            logger.error(f"Failed to initialize Presidio Analyzer: {e}")
-    return _analyzer
+    detected = []
+    sanitized = text
+    for pii_type, pattern in _PII_PATTERNS:
+        if pattern.search(sanitized):
+            detected.append(pii_type)
+            sanitized = pattern.sub(_PII_REDACT_MAP[pii_type], sanitized)
+    return sanitized, detected
 
 
-def get_anonymizer():
-    """
-    Lazy loader for Presidio AnonymizerEngine.
-    """
-    global _anonymizer
-    if _anonymizer is None:
-        from presidio_anonymizer import AnonymizerEngine
-
-        try:
-            _anonymizer = AnonymizerEngine()
-        except Exception as e:
-            logger.error(f"Failed to initialize Presidio Anonymizer: {e}")
-    return _anonymizer
-
-
-async def warmup_guardrails():
-    """Warms up NLP models to prevent first-request latency."""
-    try:
-        global _profanity_loaded
-        from backend.config import settings
-
-        logger.info(f"Warming up guardrail models (Env: {settings.ENV})...")
-
-        if settings.ENV != "development":
-            # Sequential loading to avoid RAM spikes on low-memory containers
-            logger.info("Loading Presidio Analyzer...")
-            await asyncio.to_thread(get_analyzer)
-
-            logger.info("Loading Presidio Anonymizer...")
-            await asyncio.to_thread(get_anonymizer)
-
-            logger.info("Loading Reranker Model...")
-            from backend.retrieval.reranker import get_model
-
-            await asyncio.to_thread(get_model)
-
-        # Configure profanity with technical whitelist (Fast across all envs)
-        if not _profanity_loaded:
-            try:
-                from better_profanity import profanity
-
-                whitelist = ["dummy", "mock", "stub", "lorem", "ipsum", "test", "demo"]
-                profanity.load_censor_words(whitelist_words=whitelist)
-                _profanity_loaded = True
-            except Exception as e:
-                logger.error(f"Failed to load profanity words: {e}")
-
-        logger.info("Guardrail models warmed up successfully.")
-    except Exception as e:
-        logger.error(f"Critical error during guardrail warmup: {e}")
+# Prompt Injection Patterns (Lightweight Regex style)
+INJECTION_PATTERNS = [
+    r"ignore (all )?previous instructions",
+    r"system override",
+    r"new instructions:",
+    r"you are now a",
+    r"forget everything you (know|learnt)",
+    r"reveal your system prompt",
+    r"disregard (any|all) constraints",
+]
 
 
 def get_profanity():
@@ -92,23 +70,10 @@ def get_profanity():
     return profanity
 
 
-# Prompt Injection Patterns (Lightweight ReAct/Regex style)
-INJECTION_PATTERNS = [
-    r"ignore (all )?previous instructions",
-    r"system override",
-    r"new instructions:",
-    r"you are now a",
-    r"forget everything you (know|learnt)",
-    r"reveal your system prompt",
-    r"disregard (any|all) constraints",
-]
-
-
-# @observe(name="Input Guardrails")
 def run_input_guardrails(query: str) -> GuardResult:
     """
     Screens incoming queries for prompt injection, PII, and profanity.
-    Optimized for 'Fast Mode' in development to prevent NLP cold-start hangs.
+    Uses lightweight regex for PII — no NLP models loaded on startup.
     """
     from backend.config import settings
 
@@ -134,35 +99,10 @@ def run_input_guardrails(query: str) -> GuardResult:
                 metadata={"detected_pattern": pattern, "guardrail": "injection"},
             )
 
-    # 3. PII Detection (Presidio)
-    pii_types = []
-    sanitized_query = query
-
-    analyzer = get_analyzer()
-    anonymizer = get_anonymizer()
-
-    if analyzer and anonymizer:
-        try:
-            entities = [
-                "PHONE_NUMBER",
-                "EMAIL_ADDRESS",
-                "CREDIT_CARD",
-                "LOCATION",
-                "PERSON",
-                "PASSWORD",
-                "US_SSN",
-                "IP_ADDRESS",
-                "CRYPTO",
-            ]
-            results = analyzer.analyze(text=query, language="en", entities=entities)
-            pii_types = list({res.entity_type for res in results})
-
-            if results:
-                anonymized_result = anonymizer.anonymize(text=query, analyzer_results=results)
-                sanitized_query = anonymized_result.text
-                logger.info(f"PII detected: {pii_types}")
-        except Exception as e:
-            logger.error(f"PII analysis failed: {e}")
+    # 3. PII Detection (Regex — replaces Presidio)
+    sanitized_query, pii_types = _regex_pii_filter(query)
+    if pii_types:
+        logger.info(f"PII detected and redacted: {pii_types}")
 
     return GuardResult(
         passed=True,

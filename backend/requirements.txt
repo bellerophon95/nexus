@@ -24,7 +24,7 @@ python-magic
 qdrant-client
 spacy
 pypdf
-unstructured[pdf]
+# unstructured[pdf] REMOVED — too memory-heavy for t3.small; pypdf used exclusively
 datasets
 pandas
 simhash
@@ -37,8 +37,8 @@ langfuse==2.57.12
 ragas==0.1.21
 cohere>=5.0.0
 tiktoken
-presidio-analyzer
-presidio-anonymizer
+# presidio-analyzer REMOVED — replaced with regex PII filter (~500MB RAM saved)
+# presidio-anonymizer REMOVED — replaced with regex PII filter
 
 # Models
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
