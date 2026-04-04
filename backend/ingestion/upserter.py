@@ -117,6 +117,8 @@ def insert_chunks(
                     "key_phrases": chunk["key_phrases"],
                     "user_id": user_id,
                     "is_personal": is_personal,
+                    "title": chunk.get("metadata", {}).get("title") or "Unknown Document",
+                    "source_path": chunk.get("metadata", {}).get("source_path") or "",
                 },
             )
             qdrant_points.append(point)
