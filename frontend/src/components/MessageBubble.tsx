@@ -52,7 +52,7 @@ export function MessageBubble({
   onCitationClick, 
   onFeedback 
 }: MessageBubbleProps) {
-  const isUser = role === "user";
+  const isUser = role.toLowerCase() === "user";
   const [showTrace, setShowTrace] = React.useState(false);
 
   // Helper to format scores

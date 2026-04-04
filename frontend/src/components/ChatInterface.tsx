@@ -78,6 +78,7 @@ export function ChatInterface({
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const lastSyncedConvId = useRef<string | null | undefined>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -94,29 +95,33 @@ export function ChatInterface({
   }, [initialConvId]);
 
   useEffect(() => {
-    if (initialMessages.length > 0) {
-      // Normalize history from DB (snake_case) to Frontend (camelCase)
+    // Determine if we should perform a full synchronization from properties.
+    // We skip sync if we are currently loading/streaming to prevent overwriting the active response.
+    // We also skip if initialConvId is null (as this indicates a new thread interaction).
+    const isChangingThread = initialConvId !== null && initialConvId !== lastSyncedConvId.current;
+    const needsInitialLoading = initialConvId !== null && messages.length === 0 && initialMessages.length > 0;
+    const shouldSync = !isLoading && (isChangingThread || needsInitialLoading);
+
+    if (shouldSync) {
       const normalized = initialMessages.map(msg => ({
         ...msg,
         agentSteps: msg.agentSteps || (msg as any).agent_steps,
         citations: msg.citations || (msg as any).citations
       }));
       setMessages(normalized);
+      lastSyncedConvId.current = initialConvId;
       
-      // Auto-populate the sidebar with the latest assistant message's logic/citations
-      const lastAssistant = [...normalized].reverse().find(m => m.role === "assistant");
+      // Auto-populate the sidebar with relevant data from the newly synced messages
+      const lastAssistant = [...normalized].reverse().find(m => m.role.toLowerCase() === "assistant");
       if (lastAssistant) {
         if (lastAssistant.citations) onCitationsUpdate?.(lastAssistant.citations);
         if (lastAssistant.agentSteps) {
-            // We need to pass them one by one or as a batch
-            lastAssistant.agentSteps.forEach((step: AgentStep) => onAgentStep?.(step));
+          lastAssistant.agentSteps.forEach((step: AgentStep) => onAgentStep?.(step));
         }
         if (lastAssistant.metrics) onMetricsUpdate?.(lastAssistant.metrics);
       }
-    } else if (!initialConvId) {
-      setMessages([]);
     }
-  }, [initialMessages, initialConvId]);
+  }, [initialMessages, initialConvId, isLoading]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -146,103 +151,98 @@ export function ChatInterface({
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
 
-    eventSource.onerror = (err) => {
-        console.error("SSE Connection Error:", err);
-        setIsLoading(false);
-        setMessages(prev => [
-            ...prev.slice(0, -1),
-            { role: "assistant", content: "⚠️ The Nexus backend is currently experiencing connection issues. Please try again in a few moments." }
-        ]);
-        eventSource.close();
-    };
-
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         
-        if (data.type === "token") {
-          setMessages((prev) => {
-            const lastMessage = prev[prev.length - 1];
-            if (lastMessage && lastMessage.role === "assistant") {
-              const updatedMessage = {
-                ...lastMessage,
-                content: lastMessage.content + data.content
-              };
-              return [...prev.slice(0, -1), updatedMessage];
-            }
-            return prev;
-          });
-        } else if (data.type === "agent_step") {
-          onAgentStep?.(data);
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            const last = newMessages[newMessages.length - 1];
-            if (last && last.role === "assistant") {
-              const steps = last.agentSteps || [];
-              const existingIdx = steps.findIndex(s => s.agent === data.agent && s.tool === data.tool);
-              if (existingIdx > -1) {
-                steps[existingIdx] = { agent: data.agent, tool: data.tool, status: data.status };
-              } else {
-                steps.push({ agent: data.agent, tool: data.tool, status: data.status });
-              }
-              last.agentSteps = [...steps];
-            }
-            return newMessages;
-          });
-        } else if (data.type === "activity") {
-          onActivity?.(data);
-        } else if (data.type === "metrics") {
-          onMetricsUpdate?.(data);
+        if (data.type === "tokens") {
           setMessages((prev) => {
             const newMessages = [...prev];
             const lastMessage = newMessages[newMessages.length - 1];
             if (lastMessage && lastMessage.role === "assistant") {
-              lastMessage.metrics = data;
+              lastMessage.content += data.content;
             }
             return newMessages;
           });
-        } else if (data.type === "done") {
-          if (data.citations) {
-            onCitationsUpdate?.(data.citations);
+        } else if (data.type === "agent_step" || data.type === "activity") {
+          if (data.type === "agent_step") {
+            onAgentStep?.({
+              agent: data.agent,
+              tool: data.tool,
+              status: data.status
+            });
+          } else {
+            onActivity?.(data);
           }
           
-          if (data.conversation_id && !conversationId) {
-            setConversationId(data.conversation_id);
-            onConversationCreated?.(data.conversation_id);
-          }
-
-          if (data.message_id) {
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              const last = newMessages[newMessages.length - 1];
-              if (last && last.role === "assistant") {
-                last.id = data.message_id;
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage && lastMessage.role === "assistant") {
+              const steps = lastMessage.agentSteps || [];
+              const agent = data.agent || data.node || "Agent";
+              const tool = data.tool || data.status || "Thinking...";
+              const status = data.status === "completed" || data.status_type === "completed" ? "completed" : "running";
+              
+              const existingIdx = steps.findIndex(s => s.agent === agent && s.tool === tool);
+              if (existingIdx !== -1) {
+                steps[existingIdx] = { ...steps[existingIdx], status: status as any };
+              } else {
+                steps.push({ agent, tool, status: status as any });
               }
-              return newMessages;
-            });
-          }
-
+              lastMessage.agentSteps = [...steps];
+            }
+            return newMessages;
+          });
+        } else if (data.type === "metrics") {
+          onMetricsUpdate?.(data.metrics);
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage && lastMessage.role === "assistant") {
+              lastMessage.metrics = data.metrics;
+            }
+            return newMessages;
+          });
+        } else if (data.type === "citations") {
+          onCitationsUpdate?.(data.citations);
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage && lastMessage.role === "assistant") {
+              lastMessage.citations = data.citations;
+            }
+            return newMessages;
+          });
+        } else if (data.type === "conversation_id") {
+          const newId = data.conversation_id;
+          setConversationId(newId);
+          onConversationCreated?.(newId);
+          // Mark this ID as "synced" so the useEffect doesn't wipe our state when isLoading changes
+          lastSyncedConvId.current = newId;
+        } else if (data.type === "completion") {
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage && lastMessage.role === "assistant") {
+              lastMessage.id = data.message_id;
+            }
+            return newMessages;
+          });
           setIsLoading(false);
           eventSource.close();
         } else if (data.type === "error") {
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            const lastMessage = newMessages[newMessages.length - 1];
-            if (lastMessage) {
-              lastMessage.content = `Error: ${data.message}`;
-            }
-            return newMessages;
-          });
+          console.error("SSE Error:", data.error);
           setIsLoading(false);
           eventSource.close();
         }
       } catch (err) {
-        console.error("Error parsing SSE data:", err);
+        console.error("Failed to parse SSE data:", err);
       }
     };
 
     eventSource.onerror = (err) => {
-      console.error("SSE Connection Error. Status:", eventSource.readyState, "Event:", err);
+      console.error("EventSource failed:", err);
       setIsLoading(false);
       eventSource.close();
     };
