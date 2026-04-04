@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
@@ -23,7 +24,59 @@ from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Nexus Platform Lifespan Manager: Initializes tracing, config, and background threads.
+    """
+    print(f"--- {settings.APP_NAME} Startup ---")
+
+    # Diagnostic: Log all registered routes
+    for route in app.routes:
+        if hasattr(route, "path"):
+            logger.info(f"Registered route: {route.path}")
+
+    from backend.observability.tracing import init_tracing
+
+    init_tracing()
+
+    # Ensure local storage exists
+    os.makedirs(settings.LOCAL_STORAGE_PATH, exist_ok=True)
+
+    # Configuration check
+    missing = settings.validate_config()
+    if missing:
+        logger.warning(f"Missing configuration: {', '.join(missing)}")
+    else:
+        logger.info("All critical configuration variables are present.")
+
+    # 2. Start Background Ingestion Worker & Reaper in dedicated threads
+    from backend.ingestion.reaper import run_reaper_loop
+    from backend.ingestion.worker import run_worker_thread
+
+    t1 = threading.Thread(target=run_worker_thread, daemon=True)
+    t1.start()
+
+    t2 = threading.Thread(target=run_reaper_loop, daemon=True)
+    t2.start()
+
+    logger.info(
+        f"Nexus Backend started in {settings.ENV} mode (Dedicated Ingestion Worker & Reaper Threads)"
+    )
+
+    yield  # --- API is active here ---
+
+    # Shutdown logic
+    print(f"Shutting down {settings.APP_NAME}")
+    from backend.ingestion.worker import get_nlp_executor
+
+    executor = get_nlp_executor()
+    executor.shutdown(wait=False, cancel_futures=True)
+    logger.info("NLP Process Pool shut down.")
+
+
+app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, version="0.1.0", lifespan=lifespan)
 
 # CORS - Explicitly allowing the new AWS domain and keeping legacy Render for compatibility
 allowed_origins = [
@@ -77,61 +130,6 @@ async def custom_404_handler(request: Request, exc: Exception):
             "suggestion": "Check /api/health for registered routes",
         },
     )
-
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Nexus Platform Startup: Initialize tracing, validate config, and log registered routes.
-    """
-    print(f"--- {settings.APP_NAME} Startup ---")
-
-    # Diagnostic: Log all registered routes
-    for route in app.routes:
-        if hasattr(route, "path"):
-            logger.info(f"Registered route: {route.path}")
-
-    from backend.observability.tracing import init_tracing
-
-    init_tracing()
-
-    # Ensure local storage exists
-    os.makedirs(settings.LOCAL_STORAGE_PATH, exist_ok=True)
-
-    # Configuration check
-    missing = settings.validate_config()
-    if missing:
-        logger.warning(f"Missing configuration: {', '.join(missing)}")
-    else:
-        logger.info("All critical configuration variables are present.")
-
-    # Note: Presidio warmup removed — PII detection now uses zero-RAM regex filter.
-    # Backend starts instantly with no blocking model loads.
-
-    # 2. Start Background Ingestion Worker & Reaper in dedicated threads
-    from backend.ingestion.reaper import run_reaper_loop
-    from backend.ingestion.worker import run_worker_thread
-
-    t1 = threading.Thread(target=run_worker_thread, daemon=True)
-    t1.start()
-
-    t2 = threading.Thread(target=run_reaper_loop, daemon=True)
-    t2.start()
-
-    logger.info(
-        f"Nexus Backend started in {settings.ENV} mode (Dedicated Ingestion Worker & Reaper Threads)"
-    )
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    print(f"Shutting down {settings.APP_NAME}")
-    # Clean shutdown of the NLP executor
-    from backend.ingestion.worker import get_nlp_executor
-
-    executor = get_nlp_executor()
-    executor.shutdown(wait=False, cancel_futures=True)
-    logger.info("NLP Process Pool shut down.")
 
 
 if __name__ == "__main__":

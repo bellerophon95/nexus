@@ -49,8 +49,14 @@ async def query_streaming(
         captured_steps = []
         last_heartbeat = time.perf_counter()
 
-        async def yield_agent_step(agent, tool, status):
-            step = {"type": "agent_step", "agent": agent, "tool": tool, "status": status}
+        async def yield_agent_step(agent, tool, status, rationale=None):
+            step = {
+                "type": "agent_step",
+                "agent": agent,
+                "tool": tool,
+                "status": status,
+                "rationale": rationale,
+            }
             captured_steps.append(step)
             return f"data: {json.dumps(step)}\n\n"
 
@@ -65,7 +71,6 @@ async def query_streaming(
                 return ": heartbeat\n\n"
             return None
 
-        print(f"DEBUG: event_generator starting for query: {q[:20]}")
         # 0. Warming comment to flush proxy buffers immediately
         yield ": warming connection\n\n"
         yield await yield_agent_step("Nexus", "Initializing Connection", "running")
@@ -96,20 +101,30 @@ async def query_streaming(
                 yield f"data: {json.dumps({'type': 'done', 'citations': []})}\n\n"
                 return
 
+            # 1. Yield bootstrap metrics to wake up the UI metrics panel
+            latency_ms = (time.perf_counter() - start_time) * 1000
+            yield f"data: {json.dumps({'type': 'metrics', 'latency': latency_ms, 'tokens': 0, 'cost': 0, 'tier': 'initializing', 'cache_hit': False, 'hallucinationScore': 0.0, 'guardrailStatus': 'passed'})}\n\n"
+
             # Use sanitized content for the rest of the pipeline (PII Anonymized)
             effective_q = guard_result.sanitized_content
-            yield await yield_agent_step("Nexus", "Initializing Connection", "completed")
+            yield await yield_agent_step(
+                "Nexus", "Initializing Connection", "completed", "Establishing SSE channel."
+            )
             yield f"data: {json.dumps({'type': 'activity', 'node': 'router', 'status': 'Query intent analyzed.', 'status_type': 'completed'})}\n\n"
 
             # Handle Conversation Persistence
             if not current_conv_id:
-                yield await yield_agent_step("Nexus", "Initializing Thread", "running")
+                yield await yield_agent_step(
+                    "Nexus", "Initializing Thread", "running", "Creating new conversation record."
+                )
                 title = await generate_title(effective_q)
                 current_conv_id = await create_conversation(title, user_id=user_id)
                 logger.info(
                     f"Created new conversation for user {user_id} with title '{title}': {current_conv_id}"
                 )
-                yield await yield_agent_step("Nexus", "Initializing Thread", "completed")
+                yield await yield_agent_step(
+                    "Nexus", "Initializing Thread", "completed", "Thread ready."
+                )
 
             # Save user message (save the raw query for user history, but effective_q is used for LLM)
             await save_message(
@@ -122,7 +137,7 @@ async def query_streaming(
             cached = await asyncio.to_thread(get_semantic_cache().get, effective_q)
             if cached:
                 logger.info(f"Cache hit for query: {q[:50]}...")
-                yield f"data: {json.dumps({'type': 'token', 'content': cached['answer']})}\n\n"
+                yield f"data: {json.dumps({'type': 'tokens', 'content': cached['answer']})}\n\n"
 
                 # Yield cache hit metrics
                 latency_ms = (time.perf_counter() - start_time) * 1000
@@ -198,15 +213,24 @@ async def query_streaming(
                     if updates.get("activity_log"):
                         status_desc = updates["activity_log"][-1].get("status", "Working...")
 
-                    yield await yield_agent_step(agent_name, node_name, "completed")
-                    yield f"data: {json.dumps({'type': 'activity', 'node': node_name, 'status': status_desc, 'status_type': 'completed'})}\n\n"
+                    # Extract rationale if available
+                    rationale = (
+                        updates["activity_log"][-1].get("rationale")
+                        if updates.get("activity_log")
+                        else None
+                    )
+                    yield await yield_agent_step(agent_name, node_name, "completed", rationale)
+                    yield f"data: {json.dumps({'type': 'activity', 'node': node_name, 'status': status_desc, 'status_type': 'completed', 'rationale': rationale})}\n\n"
 
                     # Capture tokens if analyst node yields final_answer
                     if updates.get("final_answer") and not full_answer:
                         full_answer = updates["final_answer"]
                         # Simulate token-by-token streaming for the frontend "typing" effect
-                        for token in full_answer.split(" "):
-                            yield f"data: {json.dumps({'type': 'token', 'content': token + ' '})}\n\n"
+                        tokens = full_answer.split(" ")
+                        for i, token in enumerate(tokens):
+                            # Append space to every token except the last to avoid trailing space issues
+                            content = token + (" " if i < len(tokens) - 1 else "")
+                            yield f"data: {json.dumps({'type': 'tokens', 'content': content})}\n\n"
                             await asyncio.sleep(0.01)
 
                     # Capture citations from the state if present in the final update or analyst update
@@ -217,13 +241,17 @@ async def query_streaming(
                             new_citations.append(
                                 {
                                     "id": i + 1,
-                                    "document_id": chunk.get("document_id", f"doc_{i}"),
+                                    "document_id": chunk.get("metadata", {}).get(
+                                        "document_id", f"doc_{i}"
+                                    ),
                                     "title": chunk.get("metadata", {}).get("title", "Unknown"),
                                     "text": chunk.get("text", ""),
                                     "metadata": chunk.get("metadata", {}),
                                 }
                             )
                         citations = new_citations
+                        # Early yield of citations to the UI
+                        yield f"data: {json.dumps({'type': 'citations', 'citations': citations})}\n\n"
 
                     last_heartbeat = time.perf_counter()
                     yield await heartbeat() or ""
@@ -233,7 +261,7 @@ async def query_streaming(
                 if "recursion limit" in str(e).lower():
                     logger.error("LangGraph recursion limit reached")
                     full_answer = "I've searched extensively but couldn't find a definitive answer in your documents. Please try a more specific question."
-                    yield f"data: {json.dumps({'type': 'token', 'content': f'\n\n{full_answer}'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'tokens', 'content': f'\n\n{full_answer}'})}\n\n"
                 else:
                     raise e
 
