@@ -19,6 +19,7 @@ from backend.api import (
     routes_search,
     routes_skills,
     routes_tasks,
+    routes_eval,
 )
 from backend.config import settings
 
@@ -114,6 +115,7 @@ app.include_router(routes_documents.router, prefix="/api/documents", tags=["Docu
 app.include_router(routes_history.router, prefix="/api/history", tags=["History"])
 app.include_router(routes_tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(routes_skills.router, prefix="/api/skills", tags=["Skills"])
+app.include_router(routes_eval.router, prefix="/api/evaluation", tags=["Evaluation"])
 
 from fastapi.responses import JSONResponse
 

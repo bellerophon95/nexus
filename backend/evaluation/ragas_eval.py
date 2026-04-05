@@ -11,15 +11,8 @@ logger = logging.getLogger(__name__)
 # These libraries consume ~300MB+ RAM; loading only during 5% evaluation sampling
 # keeps the idle backend footprint low on the production t3.small instance.
 
-# ⚠️  DEAD CODE — NOT CALLED IN THE LIVE QUERY PATH
-# These functions are defined but never imported or invoked from routes_query.py.
-# The live path uses llm_judge_evaluate_async (llm_judge.py) instead.
-#
-# TODO: Wire into the post-stream evaluation block in routes_query.py:
-#   1. Call run_ragas_eval_async(q, full_answer, [c["text"] for c in context_chunks], trace_id)
-#   2. Surface context_precision / answer_relevancy scores in the metrics payload
-#   3. Only run when tier == "rag" (requires context; meaningless without it)
-#   4. Guard with a timeout (RAGAS calls are slow — ~3-5s)
+# Ragas Evaluation Service
+# Integrated into the EvaluationManager for asynchronous and manual evaluation tasks.
 
 
 def run_ragas_eval_sync(

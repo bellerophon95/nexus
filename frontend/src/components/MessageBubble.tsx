@@ -14,10 +14,16 @@ import {
   BarChart3,
   Target,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Fingerprint,
+  FileSearch,
+  MessageSquare,
+  ShieldQuestion
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { API_BASE_URL } from "@/lib/constants";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface MessageBubbleProps {
   role: "user" | "assistant";
@@ -32,6 +38,12 @@ interface MessageBubbleProps {
     relevanceScore?: number;
     guardrailStatus?: string;
     tier?: string;
+    // Deep Metrics
+    judge_correctness?: number;
+    judge_completeness?: number;
+    judge_conciseness?: number;
+    ragas_context_precision?: number;
+    ragas_answer_relevancy?: number;
   };
   agentSteps?: {
     agent: string;
@@ -40,6 +52,7 @@ interface MessageBubbleProps {
   }[];
   onCitationClick?: (id: number) => void;
   onFeedback?: (messageId: string, score: number) => void;
+  onTriggerEval?: (messageId: string) => void;
   onSelect?: () => void;
   isSelected?: boolean;
 }
@@ -53,16 +66,54 @@ export function MessageBubble({
   agentSteps,
   onCitationClick, 
   onFeedback,
+  onTriggerEval,
   onSelect,
   isSelected
 }: MessageBubbleProps) {
   const isUser = role.toLowerCase() === "user";
   const [showTrace, setShowTrace] = React.useState(false);
+  const [showAudit, setShowAudit] = React.useState(false);
+  const [evalLogs, setEvalLogs] = React.useState<any[]>([]);
+  const [isLoadingAudit, setIsLoadingAudit] = React.useState(false);
+
+  const fetchAuditLogs = async () => {
+    if (!messageId || evalLogs.length > 0) {
+      setShowAudit(!showAudit);
+      return;
+    }
+
+    setIsLoadingAudit(true);
+    setShowAudit(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/evaluation/logs/${messageId}`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEvalLogs(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch audit logs:", err);
+    } finally {
+      setIsLoadingAudit(false);
+    }
+  };
 
   // Helper to format scores
   const formatScore = (score?: number) => {
     if (score === undefined || score === null) return "N/A";
     return `${(score * 100).toFixed(0)}%`;
+  };
+
+  const formatRawScore = (score?: number) => {
+    if (score === undefined || score === null) return "N/A";
+    return `${score.toFixed(1)}/5`;
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score > 4 || score > 0.8) return "text-emerald-400";
+    if (score > 2.5 || score > 0.5) return "text-yellow-400";
+    return "text-rose-400";
   };
 
   return (
@@ -237,6 +288,27 @@ export function MessageBubble({
                   >
                     <ThumbsDown className="h-3 w-3" />
                   </button>
+
+                  <button
+                    onClick={() => messageId && onTriggerEval?.(messageId)}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[9px] font-black uppercase tracking-tighter hover:bg-blue-500/20 transition-all ml-2"
+                  >
+                    <Target className="h-2.5 w-2.5" />
+                    Deep Eval
+                  </button>
+
+                  <button
+                    onClick={fetchAuditLogs}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-tighter transition-all ml-1",
+                      showAudit 
+                        ? "bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/30" 
+                        : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+                    )}
+                  >
+                    <FileSearch className="h-2.5 w-2.5" />
+                    Audit Log
+                  </button>
                 </div>
               )}
             </div>
@@ -287,6 +359,89 @@ export function MessageBubble({
                     <span className="text-[11px] font-mono font-bold text-slate-200">{formatScore(metrics.relevanceScore)}</span>
                   </div>
                 </div>
+
+                {/* New: Correctness (Judge) */}
+                {metrics.judge_correctness !== undefined && (
+                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-950/30 col-span-2 border border-blue-500/10">
+                    <ShieldCheck className={cn("h-3 w-3", getScoreColor(metrics.judge_correctness))} />
+                    <div className="flex flex-col flex-1">
+                      <span className="text-[9px] uppercase font-bold text-slate-600 leading-none italic">LLM Judge Quality</span>
+                      <div className="flex items-center justify-between">
+                         <span className={cn("text-[11px] font-mono font-black", getScoreColor(metrics.judge_correctness))}>
+                           CORRECTNESS: {formatRawScore(metrics.judge_correctness)}
+                         </span>
+                         {metrics.judge_completeness && (
+                            <span className="text-[10px] text-slate-400 font-bold">COMPLETENESS: {formatRawScore(metrics.judge_completeness)}</span>
+                         )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* New: RAG Scrutiny */}
+                {metrics.ragas_context_precision !== undefined && (
+                   <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-950/30 col-span-2 border border-emerald-500/10">
+                    <Fingerprint className={cn("h-3 w-3", getScoreColor(metrics.ragas_context_precision))} />
+                    <div className="flex flex-col flex-1">
+                      <span className="text-[9px] uppercase font-bold text-slate-600 leading-none italic">Scientific (Ragas)</span>
+                      <div className="flex items-center justify-between">
+                         <span className={cn("text-[11px] font-mono font-black", getScoreColor(metrics.ragas_context_precision))}>
+                           CONTEXT PREC: {formatScore(metrics.ragas_context_precision)}
+                         </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Audit Log Content */}
+            {showAudit && (
+              <div className="mt-2 space-y-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 backdrop-blur-xl animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                     <ShieldQuestion className="h-4 w-4 text-purple-400" />
+                     <span className="text-[11px] font-black uppercase tracking-widest text-slate-100 italic">Audit Reasoning Cluster</span>
+                  </div>
+                  {isLoadingAudit && <Loader2 className="h-3 w-3 animate-spin text-purple-400" />}
+                </div>
+
+                {evalLogs.length === 0 && !isLoadingAudit ? (
+                  <div className="p-8 text-center border border-dashed border-slate-800 rounded-lg">
+                    <MessageSquare className="h-6 w-6 text-slate-700 mx-auto mb-2" />
+                    <p className="text-[10px] text-slate-500 italic">No deep reasoning logs found for this turn yet. Run 'Deep Eval' to generate them.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
+                    {evalLogs.map((log, idx) => (
+                      <div key={idx} className="relative pl-4 border-l-2 border-purple-500/30 py-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                           <Badge variant="outline" className="text-[9px] font-black uppercase bg-purple-500/10 border-purple-500/30 text-purple-400 py-0 h-4">
+                             {log.evaluator === 'llm_judge' ? 'LLM JUDGE' : 'SCIENTIFIC (RAGAS)'}
+                           </Badge>
+                           <span className="text-[9px] text-slate-500 font-mono">
+                             {new Date(log.created_at).toLocaleTimeString()}
+                           </span>
+                        </div>
+                        <p className="text-[13px] leading-relaxed text-slate-300 font-medium whitespace-pre-wrap selection:bg-purple-500/30">
+                          {log.reasoning || "No detailed reasoning provided."}
+                        </p>
+                        {log.unsupported_claims && log.unsupported_claims.length > 0 && (
+                          <div className="mt-3 space-y-1.5">
+                             <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest flex items-center gap-1.5">
+                               <AlertTriangle className="h-3 w-3" /> Hallucination Candidates
+                             </span>
+                             <ul className="text-[11px] text-rose-300/70 space-y-1 italic bg-rose-500/5 p-2 rounded-lg border border-rose-500/10">
+                                {log.unsupported_claims.map((claim: string, i: number) => (
+                                  <li key={i}>• {claim}</li>
+                                ))}
+                             </ul>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -8,6 +8,7 @@ from backend.api.security import get_user_id
 from backend.database.chat import (
     get_conversations,
     get_messages,
+    get_message,
     # Explicit import from chat.py for shadow auth sync
     sync_user,
     update_message_feedback,
@@ -87,6 +88,27 @@ async def submit_feedback(message_id: str, body: FeedbackRequest):
         return {"status": "success", "message_id": message_id, "score": body.score}
     except Exception as e:
         logger.error(f"Failed to submit feedback for {message_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/messages/{message_id}")
+async def get_message_details(message_id: str):
+    """
+    Returns the full details (including metrics) for a specific message.
+    Used for polling evaluation results in the UI.
+    """
+    try:
+        uuid.UUID(message_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid message ID format")
+
+    try:
+        msg = await get_message(message_id)
+        if not msg:
+            raise HTTPException(status_code=404, detail="Message not found")
+        return msg
+    except Exception as e:
+        logger.error(f"Failed to fetch message {message_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

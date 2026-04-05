@@ -41,7 +41,7 @@
   },
   {
     "question": "How is token cost tracked and scored in Langfuse?",
-    "ground_heat": "Token usage is captured from OpenAI metadata, converted to USD using pricing tables for GPT-4o-mini and Claude Haiku, and pushed to Langfuse as a 'total_cost_usd' score.",
+    "ground_truth": "Token usage is captured from OpenAI metadata, converted to USD using pricing tables for GPT-4o-mini and Claude Haiku, and pushed to Langfuse as a 'total_cost_usd' score.",
     "tier": "Tier 2: Agentic Reasoning"
   },
   {

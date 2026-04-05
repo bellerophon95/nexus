@@ -18,10 +18,16 @@ export interface ChatMetrics {
   hallucinationScore?: number; // 0-1
   relevanceScore?: number; // 0-1
   guardrailStatus: "passed" | "warning" | "failed";
-  tier: "direct" | "rag" | "agentic" | "general";
+  tier: "direct" | "rag" | "agentic" | "general" | "initializing";
   latency: number; // ms
   cost: number; // USD
   tokens: number;
+  // Deep Metrics (Async)
+  judge_correctness?: number; // 1-5
+  judge_completeness?: number; // 1-5
+  judge_conciseness?: number; // 1-5
+  ragas_context_precision?: number; // 0-1
+  ragas_answer_relevancy?: number; // 0-1
 }
 
 interface MetricsPanelProps {
@@ -56,9 +62,14 @@ export function MetricsPanel({ metrics, isLoading }: MetricsPanelProps) {
   }
 
   const getScoreColor = (score: number) => {
-    if (score > 0.8) return "text-emerald-400";
-    if (score > 0.5) return "text-yellow-400";
+    if (score > 4 || score > 0.8) return "text-emerald-400";
+    if (score > 2.5 || score > 0.5) return "text-yellow-400";
     return "text-rose-400";
+  };
+
+  const formatRawScore = (score?: number) => {
+    if (score === undefined || score === null) return "N/A";
+    return `${score.toFixed(1)}/5`;
   };
 
   const getGuardrailBadge = (status: string) => {
@@ -122,6 +133,24 @@ export function MetricsPanel({ metrics, isLoading }: MetricsPanelProps) {
         value={metrics.tier.toUpperCase()}
         color="text-blue-400"
       />
+
+      {metrics.judge_correctness !== undefined && (
+        <MetricItem 
+          icon={<ShieldCheck className="h-4 w-4" />} 
+          label="Correctness" 
+          value={formatRawScore(metrics.judge_correctness)}
+          color={getScoreColor(metrics.judge_correctness)}
+        />
+      )}
+
+      {metrics.ragas_context_precision !== undefined && (
+        <MetricItem 
+          icon={<Activity className="h-4 w-4" />} 
+          label="RAG Context" 
+          value={`${(metrics.ragas_context_precision * 100).toFixed(0)}%`}
+          color={getScoreColor(metrics.ragas_context_precision)}
+        />
+      )}
 
       <MetricItem 
         icon={<Timer className="h-4 w-4" />} 

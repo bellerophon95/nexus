@@ -14,6 +14,8 @@ from backend.cache.semantic_cache import get_semantic_cache
 from backend.database.chat import create_conversation, get_messages, save_message, sync_user
 from backend.guardrails.input_guard import run_input_guardrails
 from backend.retrieval.generator import generate_title
+from backend.evaluation.eval_manager import EvaluationManager
+from fastapi import BackgroundTasks
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -27,6 +29,7 @@ async def query_streaming(
     match_threshold: float = Query(0.2),
     rerank: bool = Query(True),
     max_iterations: int = Query(3),
+    background_tasks: BackgroundTasks = None,
     user_id: str | None = Depends(get_user_id),
     _=Depends(rate_limit_dependency),
 ):
@@ -288,6 +291,20 @@ async def query_streaming(
                 metrics=metrics,
                 agent_steps=captured_steps,
             )
+
+            # Fire-and-forget deep evaluation in the background
+            if background_tasks and assistant_msg_id:
+                # Get context strings
+                context_texts = [c.get("text", "") for c in citations]
+                
+                background_tasks.add_task(
+                    EvaluationManager.run_async_eval,
+                    message_id=assistant_msg_id,
+                    question=effective_q,
+                    answer=full_answer,
+                    contexts=context_texts,
+                    trace_id=initial_state.get("trace_id") or "live_stream"
+                )
 
             yield f"data: {json.dumps({'type': 'done', 'citations': citations, 'conversation_id': current_conv_id, 'message_id': assistant_msg_id})}\n\n"
 
