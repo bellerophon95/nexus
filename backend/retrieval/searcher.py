@@ -64,6 +64,8 @@ def search_knowledge_base(
                         ]
                     )
 
+                logger.info(f"Searching Qdrant with filter: {filter_obj}")
+
                 # Use the most modern 'query_points' if available, otherwise fallback to 'search'
                 if hasattr(client, "query_points"):
                     qdrant_response = client.query_points(

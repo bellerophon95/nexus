@@ -253,3 +253,28 @@ async def delete_conversation(conversation_id: str) -> bool:
     except Exception as e:
         logger.error(f"Failed to delete conversation {conversation_id}: {e}")
         return False
+
+
+async def save_evaluation_alert(
+    message_id: str,
+    metric_name: str,
+    value: float,
+    threshold: float,
+    comment: str | None = None,
+) -> bool:
+    """
+    Saves an alert record when a metric falls below the threshold.
+    """
+    try:
+        data = {
+            "message_id": message_id,
+            "metric_name": metric_name,
+            "value": value,
+            "threshold": threshold,
+            "comment": comment,
+        }
+        await asyncio.to_thread(lambda: get_supabase().table("eval_alerts").insert(data).execute())
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save evaluation alert for message {message_id}: {e}")
+        return False

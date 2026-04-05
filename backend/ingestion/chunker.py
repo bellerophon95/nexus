@@ -75,6 +75,7 @@ def semantic_chunking(
 ) -> list[Chunk]:
     """
     Performs semantic chunking with High-Performance optimizations for large docs.
+    Strictly enforces max_tokens by sub-splitting chunks that are too large.
     """
     nlp, tokenizer = get_resources()
 
@@ -86,7 +87,6 @@ def semantic_chunking(
         )
 
     # 1. Segment massive text into manageable blocks
-    # 2,000,000 chars (~2MB) is the sweet spot for keeping RAM < 1GB
     SEGMENT_SIZE = 1000000 if not is_massive else 2000000
     text_segments = [text[i : i + SEGMENT_SIZE] for i in range(0, len(text), SEGMENT_SIZE)]
     total_segments = len(text_segments)
@@ -98,6 +98,39 @@ def semantic_chunking(
     all_chunks = []
     current_global_idx = 0
 
+    def add_chunk(chunk_text: str):
+        nonlocal current_global_idx
+        tokens = tokenizer.encode(chunk_text)
+        token_count = len(tokens)
+
+        # If still over max_tokens (rare, only for huge sentences), hard split
+        if token_count > max_tokens:
+            logger.warning(
+                f"Chunk still over limits ({token_count} tokens). Performing hard split."
+            )
+            parts = [tokens[i : i + max_tokens] for i in range(0, len(tokens), max_tokens)]
+            for p in parts:
+                p_text = tokenizer.decode(p)
+                all_chunks.append(
+                    Chunk(
+                        text=p_text,
+                        index=current_global_idx,
+                        token_count=len(p),
+                        metadata=metadata.copy(),
+                    )
+                )
+                current_global_idx += 1
+        else:
+            all_chunks.append(
+                Chunk(
+                    text=chunk_text,
+                    index=current_global_idx,
+                    token_count=token_count,
+                    metadata=metadata.copy(),
+                )
+            )
+            current_global_idx += 1
+
     for seg_idx, segment in enumerate(text_segments):
         logger.info(f"Chunking segment {seg_idx + 1}/{total_segments}...")
 
@@ -108,6 +141,7 @@ def semantic_chunking(
             s_text = sent.text.strip()
             if not s_text:
                 continue
+            # If a single sentence is massive, hard split it immediately
             if len(s_text) > 4000:
                 seg_sentences.extend(_hard_split_text(s_text, 2000))
             else:
@@ -134,35 +168,58 @@ def semantic_chunking(
             distances.append(1 - sim)
 
         # Identify breakpoints
-        breakpoint_threshold = np.percentile(distances, threshold_percentile) if distances else 0.5
+        # If we have very few sentences, lower the threshold to ensure some splits
+        actual_threshold = threshold_percentile
+        if len(seg_sentences) < 20:
+            actual_threshold = 80  # More aggressive splitting for short segments
+
+        breakpoint_threshold = np.percentile(distances, actual_threshold) if distances else 0.5
         breakpoints = [i for i, x in enumerate(distances) if x > breakpoint_threshold]
 
         start_sent_idx = 0
         for b_idx in breakpoints:
             chunk_text = " ".join(seg_sentences[start_sent_idx : b_idx + 1])
-            all_chunks.append(
-                Chunk(
-                    text=chunk_text,
-                    index=current_global_idx,
-                    token_count=len(tokenizer.encode(chunk_text)),
-                    metadata=metadata.copy(),
-                )
-            )
+
+            # Enforce max_tokens: if current semantic chunk is too big, split it at sentence level
+            current_tokens = len(tokenizer.encode(chunk_text))
+            if current_tokens > max_tokens:
+                temp_text = ""
+                for s_idx in range(start_sent_idx, b_idx + 1):
+                    sentence = seg_sentences[s_idx]
+                    combined = (temp_text + " " + sentence).strip()
+                    if len(tokenizer.encode(combined)) > max_tokens:
+                        if temp_text:
+                            add_chunk(temp_text)
+                        temp_text = sentence
+                    else:
+                        temp_text = combined
+                if temp_text:
+                    add_chunk(temp_text)
+            else:
+                add_chunk(chunk_text)
+
             start_sent_idx = b_idx + 1
-            current_global_idx += 1
 
         # Final block for this segment
         if start_sent_idx < len(seg_sentences):
             chunk_text = " ".join(seg_sentences[start_sent_idx:])
-            all_chunks.append(
-                Chunk(
-                    text=chunk_text,
-                    index=current_global_idx,
-                    token_count=len(tokenizer.encode(chunk_text)),
-                    metadata=metadata.copy(),
-                )
-            )
-            current_global_idx += 1
+            # Repeat max_tokens logic for the final block
+            current_tokens = len(tokenizer.encode(chunk_text))
+            if current_tokens > max_tokens:
+                temp_text = ""
+                for s_idx in range(start_sent_idx, len(seg_sentences)):
+                    sentence = seg_sentences[s_idx]
+                    combined = (temp_text + " " + sentence).strip()
+                    if len(tokenizer.encode(combined)) > max_tokens:
+                        if temp_text:
+                            add_chunk(temp_text)
+                        temp_text = sentence
+                    else:
+                        temp_text = combined
+                if temp_text:
+                    add_chunk(temp_text)
+            else:
+                add_chunk(chunk_text)
 
         if progress_callback:
             p = start_progress + (seg_idx + 1) / total_segments * (end_progress - start_progress)

@@ -111,7 +111,7 @@ def process_chunks_batch(chunk_data: list[dict[str, Any]]) -> list[dict[str, Any
     from backend.ingestion.embedder import embed_chunks_batch
     from backend.ingestion.enricher import enrich_chunks_batch
 
-    texts = [c["text"] for c in chunk_data]
+    texts = [c.get("text", "") for c in chunk_data]
 
     # Batch enrich and embed
     batch_enrichments = enrich_chunks_batch(texts)
