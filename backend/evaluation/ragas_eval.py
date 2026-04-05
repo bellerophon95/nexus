@@ -26,7 +26,7 @@ async def run_scientific_eval_shim(
 
         # Combined evaluation prompt for efficiency
         context_block = "\n---\n".join(
-            [f"Context {i+1}: {c[:1500]}" for i, c in enumerate(contexts)]
+            [f"Context {i + 1}: {c[:1500]}" for i, c in enumerate(contexts)]
         )
 
         prompt = f"""

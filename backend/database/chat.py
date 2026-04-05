@@ -157,12 +157,9 @@ async def get_message(message_id: str) -> dict[str, Any] | None:
     """
     try:
         result = await asyncio.to_thread(
-            lambda: get_supabase()
-            .table("messages")
-            .select("*")
-            .eq("id", message_id)
-            .single()
-            .execute()
+            lambda: (
+                get_supabase().table("messages").select("*").eq("id", message_id).single().execute()
+            )
         )
         return result.data
     except Exception as e:

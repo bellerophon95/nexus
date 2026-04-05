@@ -12,6 +12,7 @@ load_dotenv()
 from backend.api import (
     routes_agents,
     routes_documents,
+    routes_eval,
     routes_health,
     routes_history,
     routes_ingest,
@@ -19,7 +20,6 @@ from backend.api import (
     routes_search,
     routes_skills,
     routes_tasks,
-    routes_eval,
 )
 from backend.config import settings
 

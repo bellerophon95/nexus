@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import traceback
 from typing import Any
 
 from langchain_openai import ChatOpenAI

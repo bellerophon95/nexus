@@ -44,12 +44,14 @@ async def get_message_evaluation_logs(message_id: str) -> list[dict[str, Any]]:
     """
     try:
         result = await asyncio.to_thread(
-            lambda: get_supabase()
-            .table("evaluation_logs")
-            .select("*")
-            .eq("message_id", message_id)
-            .order("created_at", desc=True)
-            .execute()
+            lambda: (
+                get_supabase()
+                .table("evaluation_logs")
+                .select("*")
+                .eq("message_id", message_id)
+                .order("created_at", desc=True)
+                .execute()
+            )
         )
         return result.data if result.data else []
     except Exception as e:
@@ -64,13 +66,15 @@ async def get_evaluation_stats():
     try:
         # Fetch last 100 evaluated messages to calculate averages
         result = await asyncio.to_thread(
-            lambda: get_supabase()
-            .table("messages")
-            .select("metrics, created_at")
-            .not_.is_("metrics", "null")
-            .order("created_at", desc=True)
-            .limit(100)
-            .execute()
+            lambda: (
+                get_supabase()
+                .table("messages")
+                .select("metrics, created_at")
+                .not_.is_("metrics", "null")
+                .order("created_at", desc=True)
+                .limit(100)
+                .execute()
+            )
         )
 
         messages = result.data or []
@@ -101,12 +105,14 @@ async def get_evaluation_alerts(limit: int = 50):
     """
     try:
         result = await asyncio.to_thread(
-            lambda: get_supabase()
-            .table("eval_alerts")
-            .select("*, messages(content, conversation_id)")
-            .order("created_at", desc=True)
-            .limit(limit)
-            .execute()
+            lambda: (
+                get_supabase()
+                .table("eval_alerts")
+                .select("*, messages(content, conversation_id)")
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
         )
         return result.data or []
     except Exception as e:

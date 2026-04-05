@@ -7,8 +7,8 @@ from pydantic import BaseModel
 from backend.api.security import get_user_id
 from backend.database.chat import (
     get_conversations,
-    get_messages,
     get_message,
+    get_messages,
     # Explicit import from chat.py for shadow auth sync
     sync_user,
     update_message_feedback,
