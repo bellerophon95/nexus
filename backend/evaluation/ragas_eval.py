@@ -32,7 +32,11 @@ def run_ragas_eval_sync(
         from ragas import evaluate
         from ragas.metrics import answer_relevancy, context_precision, context_recall, faithfulness
 
-        data = {"question": [query], "answer": [answer], "contexts": [contexts]}
+        # Context Truncation to save tokens and prevent failures (gpt-4o-mini window)
+        MAX_CONTEXT_CHARS = 2000
+        truncated_contexts = [c[:MAX_CONTEXT_CHARS] for c in contexts]
+
+        data = {"question": [query], "answer": [answer], "contexts": [truncated_contexts]}
 
         metrics = [faithfulness, answer_relevancy, context_precision]
 

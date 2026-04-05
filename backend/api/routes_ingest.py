@@ -197,7 +197,7 @@ async def ingest_document(
     Ingests a document through the pipeline asynchronously.
     Enforces a 5MB limit to prevent OOM on Render Free Tier.
     """
-    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
 
     try:
         # 1. Quick size check before saving to disk
@@ -208,11 +208,11 @@ async def ingest_document(
 
         if size > MAX_FILE_SIZE:
             logger.warning(
-                f"File upload rejected: {file.filename} is {(size / 1024 / 1024):.2f}MB (Max 5MB)"
+                f"File upload rejected: {file.filename} is {(size / 1024 / 1024):.2f}MB (Max 2MB)"
             )
             raise HTTPException(
                 status_code=413,
-                detail=f"File too large ({(size / 1024 / 1024):.1f}MB). The Free Tier limit is 5MB to prevent system instability.",
+                detail=f"File too large ({(size / 1024 / 1024):.1f}MB). The current limit is 2MB to ensure stability on small instances.",
             )
 
         # Normalize is_personal boolean from different string representation

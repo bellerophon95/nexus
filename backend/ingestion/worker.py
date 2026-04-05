@@ -74,14 +74,18 @@ def run_worker_loop():
 
             # 3. Batch Processing (Enrich + Embed)
             # Flattened list for the pipeline
-            all_chunk_payloads = [
-                {
-                    "text": c["content"],
-                    "token_count": c["metadata"].get("token_count", 0),
-                    "metadata": c.get("metadata", {}),
-                }
-                for c in claimed_chunks
-            ]
+            all_chunk_payloads = []
+            for c in claimed_chunks:
+                text = c.get(
+                    "content", c.get("text", "")
+                )  # Fallback to 'text' if renamed in future
+                all_chunk_payloads.append(
+                    {
+                        "text": text,
+                        "token_count": c.get("metadata", {}).get("token_count", 0),
+                        "metadata": c.get("metadata", {}),
+                    }
+                )
 
             from backend.ingestion.pipeline import process_chunks_batch
 
@@ -102,13 +106,20 @@ def run_worker_loop():
                     future = executor.submit(process_chunks_batch, all_chunk_payloads)
                     processed_results = future.result(timeout=120)  # 2 minute timeout per batch
                     logger.info("Worker: NLP Process Pool completed successfully.")
-                except (RuntimeError, BrokenPipeError):
-                    logger.warning(
-                        "Worker: NLP Executor crashed or broken. Recreating and retrying once..."
+                except (RuntimeError, BrokenPipeError, Exception) as inner_e:
+                    # Specific check for broken pool (often due to OOM in child)
+                    is_broken = "BrokenProcessPool" in str(inner_e) or isinstance(
+                        inner_e, RuntimeError | BrokenPipeError
                     )
-                    if _nlp_executor:
+
+                    logger.warning(
+                        f"Worker: NLP Executor issue: {inner_e}. {'Recreating pool' if is_broken else 'Retrying once'}..."
+                    )
+
+                    if is_broken and _nlp_executor:
                         _nlp_executor.shutdown(wait=False, cancel_futures=True)
                         _nlp_executor = None
+
                     executor = get_nlp_executor()
                     future = executor.submit(process_chunks_batch, all_chunk_payloads)
                     processed_results = future.result(timeout=120)

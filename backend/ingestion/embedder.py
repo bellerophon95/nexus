@@ -75,28 +75,42 @@ def generate_dense_embeddings_batch(texts: list[str], dimensions: int = 384) -> 
     client = get_client()
     max_retries = 3
     base_delay = 2.0
+    OPENAI_BATCH_LIMIT = 2048
 
-    for attempt in range(max_retries):
-        try:
-            # Note: OpenAI allows up to 2048 elements in a single batch
-            response = client.embeddings.create(
-                input=texts, model="text-embedding-3-small", dimensions=dimensions
-            )
-            # OpenAI response.data is guaranteed to be in the same order as input
-            sorted_data = sorted(response.data, key=lambda x: x.index)
-            return [item.embedding for item in sorted_data]
-        except (RateLimitError, APIConnectionError, APIStatusError) as e:
-            if attempt == max_retries - 1:
-                logger.error(f"OpenAI batch embedding failed after {max_retries} attempts: {e}")
+    all_embeddings = []
+
+    # Process in chunks of 2048
+    for i in range(0, len(texts), OPENAI_BATCH_LIMIT):
+        batch_texts = texts[i : i + OPENAI_BATCH_LIMIT]
+
+        batch_result = None
+        for attempt in range(max_retries):
+            try:
+                response = client.embeddings.create(
+                    input=batch_texts, model="text-embedding-3-small", dimensions=dimensions
+                )
+                sorted_data = sorted(response.data, key=lambda x: x.index)
+                batch_result = [item.embedding for item in sorted_data]
+                break
+            except (RateLimitError, APIConnectionError, APIStatusError) as e:
+                if attempt == max_retries - 1:
+                    logger.error(
+                        f"OpenAI batch embedding failed at index {i} after {max_retries} attempts: {e}"
+                    )
+                    raise
+                delay = base_delay * (2**attempt)
+                logger.warning(
+                    f"OpenAI batch error at index {i} (attempt {attempt + 1}): {e}. Retrying in {delay}s..."
+                )
+                time.sleep(delay)
+            except Exception as e:
+                logger.error(f"Unexpected error in OpenAI batch execution at index {i}: {e}")
                 raise
-            delay = base_delay * (2**attempt)
-            logger.warning(
-                f"OpenAI batch error (attempt {attempt + 1}): {e}. Retrying in {delay}s..."
-            )
-            time.sleep(delay)
-        except Exception as e:
-            logger.error(f"Unexpected error in OpenAI batch execution: {e}")
-            raise
+
+        if batch_result:
+            all_embeddings.extend(batch_result)
+
+    return all_embeddings
 
 
 def generate_sparse_tokens(text: str) -> dict[str, int]:

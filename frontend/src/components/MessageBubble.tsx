@@ -42,6 +42,7 @@ interface MessageBubbleProps {
     judge_correctness?: number;
     judge_completeness?: number;
     judge_conciseness?: number;
+    judge_citation_quality?: number;
     ragas_context_precision?: number;
     ragas_answer_relevancy?: number;
   };
@@ -53,6 +54,7 @@ interface MessageBubbleProps {
   onCitationClick?: (id: number) => void;
   onFeedback?: (messageId: string, score: number) => void;
   onTriggerEval?: (messageId: string) => void;
+  onPromote?: (messageId: string) => void;
   onSelect?: () => void;
   isSelected?: boolean;
 }
@@ -67,6 +69,7 @@ export function MessageBubble({
   onCitationClick, 
   onFeedback,
   onTriggerEval,
+  onPromote,
   onSelect,
   isSelected
 }: MessageBubbleProps) {
@@ -75,6 +78,9 @@ export function MessageBubble({
   const [showAudit, setShowAudit] = React.useState(false);
   const [evalLogs, setEvalLogs] = React.useState<any[]>([]);
   const [isLoadingAudit, setIsLoadingAudit] = React.useState(false);
+  const [isPromoting, setIsPromoting] = React.useState(false);
+  const [isPromoted, setIsPromoted] = React.useState(false);
+  const [isEvalTriggered, setIsEvalTriggered] = React.useState(false);
 
   const fetchAuditLogs = async () => {
     if (!messageId || evalLogs.length > 0) {
@@ -99,6 +105,57 @@ export function MessageBubble({
     }
   };
 
+  const handlePromote = async () => {
+    if (!messageId || isPromoted) return;
+    setIsPromoting(true);
+    try {
+       const response = await fetch(`${API_BASE_URL}/api/evaluation/golden`, {
+         method: 'POST',
+         headers: {
+           ...getAuthHeaders(),
+           'Content-Type': 'application/json'
+         },
+         body: JSON.stringify({ message_id: messageId, tier: "Production Feed" })
+       });
+       if (response.ok) {
+         setIsPromoted(true);
+         onPromote?.(messageId);
+         // Reset after 3s
+         setTimeout(() => setIsPromoted(false), 3000);
+       }
+    } catch (err) {
+      console.error("Failed to promote to golden set:", err);
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  const handleTriggerEval = async () => {
+    if (!messageId || isEvalTriggered) return;
+    setIsEvalTriggered(true);
+    try {
+      if (onTriggerEval) {
+        onTriggerEval(messageId);
+      } else {
+        // Fallback direct call if prop not provided
+        const response = await fetch(`${API_BASE_URL}/api/evaluation/trigger`, {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ message_id: messageId })
+        });
+        if (!response.ok) throw new Error("Failed to trigger eval");
+      }
+      // Reset after 3s
+      setTimeout(() => setIsEvalTriggered(false), 3000);
+    } catch (err) {
+      console.error("Failed to trigger eval:", err);
+      setIsEvalTriggered(false);
+    }
+  };
+
   // Helper to format scores
   const formatScore = (score?: number) => {
     if (score === undefined || score === null) return "N/A";
@@ -110,7 +167,8 @@ export function MessageBubble({
     return `${score.toFixed(1)}/5`;
   };
 
-  const getScoreColor = (score: number) => {
+  const getScoreColor = (score?: number) => {
+    if (score === undefined || score === null) return "text-slate-500";
     if (score > 4 || score > 0.8) return "text-emerald-400";
     if (score > 2.5 || score > 0.5) return "text-yellow-400";
     return "text-rose-400";
@@ -211,12 +269,12 @@ export function MessageBubble({
                           const id = parseInt(match[1]);
                           return (
                             <button
-                              key={i}
-                              onClick={() => onCitationClick?.(id)}
-                              className="mx-1 inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-0.5 text-[11px] font-black text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 active:scale-95 transition-all"
-                            >
-                              CIT {id}
-                            </button>
+                               key={i}
+                               onClick={() => onCitationClick?.(id)}
+                               className="mx-1 inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-0.5 text-[11px] font-black text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 active:scale-95 transition-all"
+                             >
+                               CIT {id}
+                             </button>
                           );
                         }
                         return part;
@@ -236,21 +294,19 @@ export function MessageBubble({
         {!isUser && (
           <div className="flex flex-col gap-2 pt-1">
             <div className="flex items-center gap-3">
-              {metrics && (
-                <button 
-                  onClick={() => setShowTrace(!showTrace)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all",
-                    showTrace 
-                      ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30" 
-                      : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
-                  )}
-                >
-                  <Activity className="h-3 w-3" />
-                  Trace Details
-                  <ChevronDown className={cn("h-3 w-3 transition-transform", showTrace && "rotate-180")} />
-                </button>
-              )}
+              <button 
+                onClick={() => setShowTrace(!showTrace)}
+                className={cn(
+                  "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all",
+                  showTrace 
+                    ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30" 
+                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
+                )}
+              >
+                <Activity className="h-3 w-3" />
+                Trace Details
+                <ChevronDown className={cn("h-3 w-3 transition-transform", showTrace && "rotate-180")} />
+              </button>
 
               {/* Guardrail Status */}
               {metrics?.guardrailStatus && (
@@ -267,7 +323,7 @@ export function MessageBubble({
                 </div>
               )}
 
-              {/* Feedback */}
+              {/* Feedback & Tools */}
               {messageId && (
                 <div className="flex items-center gap-1 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
@@ -290,11 +346,33 @@ export function MessageBubble({
                   </button>
 
                   <button
-                    onClick={() => messageId && onTriggerEval?.(messageId)}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[9px] font-black uppercase tracking-tighter hover:bg-blue-500/20 transition-all ml-2"
+                    onClick={() => handlePromote()}
+                    disabled={isPromoting || isPromoted}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-tighter transition-all ml-2",
+                      isPromoted 
+                        ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400"
+                        : "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+                    )}
                   >
-                    <Target className="h-2.5 w-2.5" />
-                    Deep Eval
+                    {isPromoting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : 
+                     isPromoted ? <ShieldCheck className="h-2.5 w-2.5" /> :
+                     <Target className="h-2.5 w-2.5" />}
+                    {isPromoted ? "Promoted" : "Promote to Golden"}
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerEval()}
+                    disabled={isEvalTriggered}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-tighter transition-all ml-1",
+                      isEvalTriggered
+                        ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400"
+                        : "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
+                    )}
+                  >
+                    {isEvalTriggered ? <ShieldCheck className="h-2.5 w-2.5" /> : <Activity className="h-2.5 w-2.5" />}
+                    {isEvalTriggered ? "Triggered" : "Deep Eval"}
                   </button>
 
                   <button
@@ -360,25 +438,43 @@ export function MessageBubble({
                   </div>
                 </div>
 
-                {/* New: Correctness (Judge) */}
+                {/* LLM Judge Expanded metrics */}
                 {metrics.judge_correctness !== undefined && (
-                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-950/30 col-span-2 border border-blue-500/10">
-                    <ShieldCheck className={cn("h-3 w-3", getScoreColor(metrics.judge_correctness))} />
-                    <div className="flex flex-col flex-1">
-                      <span className="text-[9px] uppercase font-bold text-slate-600 leading-none italic">LLM Judge Quality</span>
-                      <div className="flex items-center justify-between">
-                         <span className={cn("text-[11px] font-mono font-black", getScoreColor(metrics.judge_correctness))}>
-                           CORRECTNESS: {formatRawScore(metrics.judge_correctness)}
+                  <div className="flex flex-col gap-2 p-2 rounded-lg bg-slate-950/30 col-span-2 border border-blue-500/10">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck className={cn("h-3 w-3", getScoreColor(metrics.judge_correctness))} />
+                      <span className="text-[9px] uppercase font-black tracking-widest text-slate-500">LLM Judge Cluster</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+                       <div className="flex items-center justify-between">
+                         <span className="text-[9px] font-bold text-slate-500 uppercase">Correctness</span>
+                         <span className={cn("text-[10px] font-mono font-black", getScoreColor(metrics.judge_correctness))}>
+                           {formatRawScore(metrics.judge_correctness)}
                          </span>
-                         {metrics.judge_completeness && (
-                            <span className="text-[10px] text-slate-400 font-bold">COMPLETENESS: {formatRawScore(metrics.judge_completeness)}</span>
-                         )}
-                      </div>
+                       </div>
+                       <div className="flex items-center justify-between">
+                         <span className="text-[9px] font-bold text-slate-500 uppercase">Completeness</span>
+                         <span className={cn("text-[10px] font-mono font-black", getScoreColor(metrics.judge_completeness))}>
+                           {formatRawScore(metrics.judge_completeness)}
+                         </span>
+                       </div>
+                       <div className="flex items-center justify-between">
+                         <span className="text-[9px] font-bold text-slate-500 uppercase">Conciseness</span>
+                         <span className={cn("text-[10px] font-mono font-black", getScoreColor(metrics.judge_conciseness))}>
+                           {formatRawScore(metrics.judge_conciseness)}
+                         </span>
+                       </div>
+                       <div className="flex items-center justify-between border-l border-slate-800 pl-4">
+                         <span className="text-[9px] font-bold text-slate-500 uppercase">Citation Q</span>
+                         <span className={cn("text-[10px] font-mono font-black", getScoreColor(metrics.judge_citation_quality))}>
+                           {formatRawScore(metrics.judge_citation_quality)}
+                         </span>
+                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* New: RAG Scrutiny */}
+                {/* RAG Scrutiny */}
                 {metrics.ragas_context_precision !== undefined && (
                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-950/30 col-span-2 border border-emerald-500/10">
                     <Fingerprint className={cn("h-3 w-3", getScoreColor(metrics.ragas_context_precision))} />
