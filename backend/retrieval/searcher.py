@@ -7,6 +7,7 @@ from backend.database.qdrant import get_qdrant
 from backend.database.supabase import get_supabase
 from backend.ingestion.embedder import generate_dense_embedding
 from backend.observability.tracing import observe
+from backend.retrieval.audit import log_search_audit
 from backend.retrieval.reranker import rerank_results
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,10 @@ def search_knowledge_base(
                             "title": payload.get("title", "Unknown"),
                         }
                     )
+
+                # Perform Search Audit
+                log_search_audit(query, user_id, filter_obj, len(initial_results))
+
                 logger.info(f"Retrieved {len(initial_results)} results from Qdrant dense search.")
             except Exception as qe:
                 logger.warning(f"Qdrant search failed: {qe}")
