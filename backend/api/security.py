@@ -44,8 +44,13 @@ async def get_current_user(
     # 2. Fallback to 'Shadow' ID (Transition mode / Guest sessions)
     # This allows the app to continue working while the frontend is being updated.
     legacy_user_id = request.headers.get("X-Nexus-User-Id") or user_id_query
+
     if legacy_user_id and legacy_user_id.strip():
-        return legacy_user_id.strip()
+        uid = legacy_user_id.strip()
+        logger.info(
+            f"Resolved Identity: {uid} (via {'Header' if request.headers.get('X-Nexus-User-Id') else 'URL Param'})"
+        )
+        return uid
 
     # 3. Deny if neither is present (Once RLS is fully enforced)
     raise HTTPException(
@@ -57,6 +62,21 @@ async def get_current_user(
 async def get_user_id(user_id: str = Depends(get_current_user)) -> str:
     """Convenience dependency that returns just the validated user_id string."""
     return user_id
+
+
+async def get_user_id_optional(
+    request: Request, user_id_query: str | None = Query(None, alias="user_id")
+) -> str | None:
+    """
+    Attempts to resolve user_id but does not raise 401 if missing.
+    Useful for filtering public/private documents without forcing login.
+    """
+    try:
+        # We reuse the logic but suppress the 401
+        header_id = request.headers.get("X-Nexus-User-Id")
+        return header_id or user_id_query
+    except Exception:
+        return None
 
 
 async def rate_limit_dependency(request: Request):

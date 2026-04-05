@@ -4,7 +4,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
 from backend.agents.graph import nexus_graph
@@ -12,10 +12,9 @@ from backend.agents.state import NexusState
 from backend.api.security import get_user_id, rate_limit_dependency
 from backend.cache.semantic_cache import get_semantic_cache
 from backend.database.chat import create_conversation, get_messages, save_message, sync_user
+from backend.evaluation.eval_manager import EvaluationManager
 from backend.guardrails.input_guard import run_input_guardrails
 from backend.retrieval.generator import generate_title
-from backend.evaluation.eval_manager import EvaluationManager
-from fastapi import BackgroundTasks
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -106,7 +105,9 @@ async def query_streaming(
 
             # 1. Yield bootstrap metrics to wake up the UI metrics panel
             latency_ms = (time.perf_counter() - start_time) * 1000
-            yield f"data: {json.dumps({'type': 'metrics', 'latency': latency_ms, 'tokens': 0, 'cost': 0, 'tier': 'initializing', 'cache_hit': False, 'hallucinationScore': 0.0, 'guardrailStatus': 'passed'})}\n\n"
+            yield f"data: {json.dumps({'type': 'metrics', 'latency': latency_ms, 'tokens': 0, 'cost': 0, 'tier': 'initializing', 'cache_hit': False, 'hallucinationScore': 0.0, 'relevanceScore': 0.0, 'guardrailStatus': 'passed'})}\n\n"
+
+            logger.info(f"Query Processed for User: {user_id}")
 
             # Use sanitized content for the rest of the pipeline (PII Anonymized)
             effective_q = guard_result.sanitized_content
@@ -270,11 +271,18 @@ async def query_streaming(
 
             # Final metrics calculation
             latency_ms = (time.perf_counter() - start_time) * 1000
+
+            # Bootstrap relevance: 1.0 if we have chunks, 0.0 if we don't (unless it's a greeting)
+            bootstrap_relevance = (
+                1.0 if citations else (1.0 if initial_state.get("is_greeting") else 0.0)
+            )
+
             metrics = {
                 "type": "metrics",
                 "latency": latency_ms,
                 "cache_hit": False,
                 "hallucinationScore": initial_state.get("hallucination_score", 0.0),
+                "relevanceScore": bootstrap_relevance,
                 "guardrailStatus": "passed",
                 "tier": "agentic",
                 "tokens": len(full_answer.split()),
@@ -296,14 +304,14 @@ async def query_streaming(
             if background_tasks and assistant_msg_id:
                 # Get context strings
                 context_texts = [c.get("text", "") for c in citations]
-                
+
                 background_tasks.add_task(
                     EvaluationManager.run_async_eval,
                     message_id=assistant_msg_id,
                     question=effective_q,
                     answer=full_answer,
                     contexts=context_texts,
-                    trace_id=initial_state.get("trace_id") or "live_stream"
+                    trace_id=initial_state.get("trace_id") or "live_stream",
                 )
 
             yield f"data: {json.dumps({'type': 'done', 'citations': citations, 'conversation_id': current_conv_id, 'message_id': assistant_msg_id})}\n\n"

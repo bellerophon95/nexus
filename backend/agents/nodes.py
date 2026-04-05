@@ -145,10 +145,50 @@ async def researcher_node(state: NexusState) -> dict[str, Any]:
                         status_msg = f"Researcher gathered {len(valid_results)} new chunks from the knowledge base."
                         rationale = f"Semantic search for '{args.get('query')}' yielded relevant document segments."
                     else:
-                        status_msg = (
-                            "Researcher searched but found no relevant chunks matching the query."
-                        )
-                        rationale = "The knowledge base did not contain direct matches for the terms used in the search query."
+                        # Diagnostic Check: Does the user even have documents?
+                        from backend.database.supabase import get_supabase
+
+                        try:
+                            # 1. Check if the user has ANY documents linked to THIS ID
+                            doc_check = (
+                                get_supabase()
+                                .table("documents")
+                                .select("id")
+                                .or_(f"user_id.eq.{state.get('user_id')},is_personal.eq.false")
+                                .limit(1)
+                                .execute()
+                            )
+                            if doc_check.data:
+                                status_msg = "Found your document library, but the specific query did not yield high-relevance matches."
+                                rationale = "Documents exist for this session, but the retrieval threshold filtered them out. Try a more general question."
+                            else:
+                                # 2. Check if a document with a similar name exists under ANY ID (Session Mismatch Detection)
+                                # We use a broad check to help the user identify Incognito/Session issues.
+                                query_terms = state["query"].split()
+                                possible_matches = []
+                                for term in query_terms:
+                                    if len(term) > 3:
+                                        m = (
+                                            get_supabase()
+                                            .table("documents")
+                                            .select("filename")
+                                            .ilike("filename", f"%{term}%")
+                                            .limit(1)
+                                            .execute()
+                                        )
+                                        if m.data:
+                                            possible_matches.append(m.data[0]["filename"])
+
+                                if possible_matches:
+                                    status_msg = f"Security Alert: Document '{possible_matches[0]}' exists but belongs to a different session ID."
+                                    rationale = "The document was found in the global database but you are not the owner in this Incognito tab. Please re-upload it."
+                                else:
+                                    status_msg = "No documents found linked to this session ID."
+                                    rationale = f"Researcher confirmed that user_id '{state.get('user_id')}' has no uploaded documents."
+                        except Exception as de:
+                            logger.error(f"Diagnostic check failed: {de}")
+                            status_msg = "Researcher searched but found no relevant chunks matching the query."
+                            rationale = "The knowledge base did not contain direct matches."
 
     return {
         "retrieved_chunks": state["retrieved_chunks"] + new_chunks,

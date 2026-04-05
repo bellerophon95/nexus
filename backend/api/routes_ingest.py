@@ -55,11 +55,11 @@ def process_ingestion_task(
             return
 
         if result["status"] == "skipped":
-            # If the document is skipped because it exists, check if we need to update its sharing status
+            # If the document is skipped because it exists, check if we need to update its identity/sharing status
             fingerprint = int(result["fingerprint"])
             existing_doc = (
                 supabase.table("documents")
-                .select("id, is_personal")
+                .select("id, is_personal, user_id")
                 .eq("fingerprint", fingerprint)
                 .execute()
             )
@@ -67,26 +67,49 @@ def process_ingestion_task(
             if existing_doc.data:
                 doc_id = existing_doc.data[0]["id"]
                 current_personal = existing_doc.data[0].get("is_personal", True)
+                current_user_id = existing_doc.data[0].get("user_id")
 
-                # If the user is requesting a more permissive state (Public) or just different, update it
+                # If the user is requesting a different ownership or sharing state, update it
+                # 'Last uploader wins' claim logic for shadow/guest sessions
+                updates = {}
                 if current_personal != is_personal:
-                    supabase.table("documents").update({"is_personal": is_personal}).eq(
-                        "id", doc_id
-                    ).execute()
+                    updates["is_personal"] = is_personal
+                if current_user_id != user_id:
+                    updates["user_id"] = user_id
+                    logger.info(f"Re-claiming document {doc_id} for new session {user_id}")
 
-                    # Also update all chunks for this document in Supabase
-                    # Qdrant updates are harder but Supabase is the source of truth for the library view
-                    supabase.table("chunks").update({"is_personal": is_personal}).eq(
-                        "document_id", doc_id
-                    ).execute()
+                if updates:
+                    supabase.table("documents").update(updates).eq("id", doc_id).execute()
 
-                    logger.info(f"Updated existing document {doc_id} is_personal to {is_personal}")
+                    # Propagate updates to all chunks in Supabase
+                    supabase.table("chunks").update(updates).eq("document_id", doc_id).execute()
+
+                    # Propagate to Qdrant for search consistency
+                    try:
+                        from qdrant_client import models
+
+                        from backend.database.qdrant import get_qdrant
+
+                        qdrant = get_qdrant()
+                        qdrant.set_payload(
+                            collection_name="nexus_chunks",
+                            payload=updates,
+                            points=models.Filter(
+                                must=[
+                                    models.FieldCondition(
+                                        key="document_id", match=models.MatchValue(value=doc_id)
+                                    )
+                                ]
+                            ),
+                        )
+                    except Exception as qe:
+                        logger.error(f"Failed to sync Qdrant payloads on claim: {qe}")
 
                 supabase.table("ingestion_tasks").update(
                     {
                         "status": "completed",
                         "progress": 100.0,
-                        "message": "Document already exists. Unified sharing state.",
+                        "message": "Document claimed by current session ID.",
                         "document_id": doc_id,
                     }
                 ).eq("id", task_id).execute()

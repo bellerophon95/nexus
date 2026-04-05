@@ -26,6 +26,8 @@ export interface ChatMetrics {
   judge_correctness?: number; // 1-5
   judge_completeness?: number; // 1-5
   judge_conciseness?: number; // 1-5
+  judge_faithfulness?: number; // 1-5
+  judge_relevance?: number; // 1-5
   ragas_context_precision?: number; // 0-1
   ragas_answer_relevancy?: number; // 0-1
 }
@@ -85,21 +87,29 @@ export function MetricsPanel({ metrics, isLoading }: MetricsPanelProps) {
     }
   };
 
+  const hScore = metrics.hallucinationScore !== undefined 
+    ? metrics.hallucinationScore 
+    : (metrics.judge_faithfulness !== undefined ? (5 - metrics.judge_faithfulness) / 4 : undefined);
+
+  const rScore = metrics.relevanceScore !== undefined 
+    ? metrics.relevanceScore 
+    : (metrics.judge_relevance !== undefined ? (metrics.judge_relevance - 1) / 4 : undefined);
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 p-4 border-t border-slate-700 bg-slate-900/60 backdrop-blur-lg">
       <MetricItem 
         icon={<Fingerprint className="h-4 w-4" />} 
         label="Faithfulness" 
         value={
-          typeof metrics.hallucinationScore === 'number'
-            ? `${((1 - metrics.hallucinationScore) * 100).toFixed(0)}%`
+          typeof hScore === 'number'
+            ? `${((1 - hScore) * 100).toFixed(0)}%`
             : metrics.tier === 'general'
             ? "General KB"
             : "Eval N/A"
         }
         color={
-          typeof metrics.hallucinationScore === 'number'
-            ? getScoreColor(1 - metrics.hallucinationScore)
+          typeof hScore === 'number'
+            ? getScoreColor(1 - hScore)
             : "text-slate-500"
         }
       />
@@ -108,15 +118,15 @@ export function MetricsPanel({ metrics, isLoading }: MetricsPanelProps) {
         icon={<BarChart3 className="h-4 w-4" />} 
         label="Relevance" 
         value={
-          typeof metrics.relevanceScore === 'number'
-            ? `${(metrics.relevanceScore * 100).toFixed(0)}%`
+          typeof rScore === 'number'
+            ? `${(rScore * 100).toFixed(0)}%`
             : metrics.tier === 'general'
             ? "General KB"
             : "Eval N/A"
         }
         color={
-          typeof metrics.relevanceScore === 'number'
-            ? getScoreColor(metrics.relevanceScore)
+          typeof rScore === 'number'
+            ? getScoreColor(rScore)
             : "text-slate-500"
         }
       />

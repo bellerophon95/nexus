@@ -38,6 +38,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/constants";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface Document {
   id: string;
@@ -68,7 +69,9 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
   const fetchDocuments = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/documents/`);
+      const response = await fetch(`${API_BASE_URL}/api/documents/`, {
+        headers: getAuthHeaders()
+      });
       if (!response.ok) throw new Error("Failed to fetch documents");
       const data = await response.json();
       setDocuments(data);
@@ -84,6 +87,7 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
     try {
       const response = await fetch(`${API_BASE_URL}/api/documents/${id}`, {
         method: "DELETE",
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {
@@ -105,6 +109,7 @@ export function DocumentLibrary({ refreshTrigger, searchQuery = "", showTitle = 
     try {
       const response = await fetch(`${API_BASE_URL}/api/documents/${id}/share`, {
         method: "POST",
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {

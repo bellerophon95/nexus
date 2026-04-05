@@ -79,10 +79,23 @@ class EvaluationManager:
             updated_metrics = {**current_metrics}
             for k, v in judge_results.items():
                 if k != "reasoning":
-                    updated_metrics[f"judge_{k}"] = v
+                    metric_key = f"judge_{k}"
+                    updated_metrics[metric_key] = v
+
+                    # UI Alias Mapping & Scaling (1-5 -> 0.0-1.0)
+                    if k == "relevance":
+                        updated_metrics["relevanceScore"] = (v - 1) / 4.0 if v > 0 else 0.0
+                    elif k == "faithfulness":
+                        # Hallucination Score is inverse of Faithfulness
+                        # 5/5 Faithful = 0.0 Hallucination
+                        # 1/5 Faithful = 1.0 Hallucination
+                        updated_metrics["hallucinationScore"] = (5 - v) / 4.0 if v > 0 else 1.0
 
             for k, v in ragas_results.items():
                 updated_metrics[f"ragas_{k}"] = v
+                # Alias Ragas answer relevancy to relevanceScore if it exists
+                if k == "answer_relevancy":
+                    updated_metrics["relevanceScore"] = v
 
             await update_message_metrics(message_id, updated_metrics)
 

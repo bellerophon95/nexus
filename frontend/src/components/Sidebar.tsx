@@ -27,7 +27,12 @@ export function Sidebar() {
   const isSettingsActive = pathname === "/settings";
 
   const handleNewChat = () => {
-    router.push("/chat");
+    if (pathname === "/chat" || pathname === "/") {
+       // Force a full context/state reset by reloading the chat page
+       window.location.href = "/chat";
+    } else {
+       router.push("/chat");
+    }
   };
 
   const handleSelectConversation = (id: string) => {

@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { API_BASE_URL } from "@/lib/constants";
+import { getAuthHeaders } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 interface Skill {
@@ -45,7 +46,9 @@ export function SkillHub({ selectedSkills, onToggleSkill }: SkillHubProps) {
   useEffect(() => {
     const fetchSkills = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/skills/index`);
+        const response = await fetch(`${API_BASE_URL}/api/skills/index`, {
+          headers: getAuthHeaders()
+        });
         const data = await response.json();
         setSkills(data.skills || []);
         setBundles(data.bundles || {});

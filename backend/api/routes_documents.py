@@ -1,8 +1,9 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from qdrant_client import models
 
+from backend.api.security import get_user_id_optional
 from backend.database.qdrant import get_qdrant
 from backend.database.supabase import get_supabase
 from backend.observability.tracing import observe
@@ -13,17 +14,24 @@ router = APIRouter()
 
 @router.get("/")
 @observe(name="List Documents")
-def list_documents():
+def list_documents(user_id: str | None = Depends(get_user_id_optional)):
     """
-    Fetches all documents from the library.
+    Fetches documents from the library that the user has permission to see.
+    (Owned by current user OR marked as public)
     """
     try:
-        response = (
-            get_supabase().table("documents").select("*").order("created_at", desc=True).execute()
-        )
+        query = get_supabase().table("documents").select("*")
+
+        # Correctly format the OR filter based on user_id availability
+        if user_id:
+            query = query.or_(f"user_id.eq.{user_id},is_personal.eq.false")
+        else:
+            query = query.eq("is_personal", False)
+
+        response = query.order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
-        logger.error(f"Failed to fetch documents: {e}")
+        logger.error(f"Failed to fetch documents for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
