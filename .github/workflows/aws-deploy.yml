@@ -3,6 +3,7 @@ name: AWS EC2 Deployment
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   validate:
@@ -81,7 +82,7 @@ jobs:
   deploy:
     name: Deploy to EC2
     needs: [validate, build-backend, build-frontend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
