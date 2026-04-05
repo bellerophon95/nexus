@@ -40,6 +40,11 @@ export interface Message {
     relevanceScore?: number;
     guardrailStatus?: string;
     tier?: string;
+    judge_correctness?: number;
+    judge_completeness?: number;
+    judge_conciseness?: number;
+    ragas_context_precision?: number;
+    ragas_answer_relevancy?: number;
   };
   agentSteps?: AgentStep[];
 }
@@ -56,6 +61,7 @@ interface ChatInterfaceProps {
   onConversationCreated?: (id: string) => void;
   onMessageSelect?: (message: Message) => void;
   selectedMessageId?: string | null;
+  isLoadingHistory?: boolean;
 }
 
 export function ChatInterface({ 
@@ -68,6 +74,7 @@ export function ChatInterface({
   conversationId: propConversationId,
   initialMessages = [],
   onConversationCreated,
+  isLoadingHistory = false,
   onMessageSelect,
   selectedMessageId
 }: ChatInterfaceProps) {
@@ -83,7 +90,7 @@ export function ChatInterface({
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
-  const lastSyncedConvId = useRef<string | null | undefined>(null);
+  const lastSyncedConvId = useRef<string | null | undefined>(undefined);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -93,39 +100,45 @@ export function ChatInterface({
     scrollToBottom();
   }, [messages]);
 
+  // Unified Synchronization Effect
   useEffect(() => {
-    // Sync external thread changes to local state
+    // 1. Sync local conversationId state with property
     if (propConversationId !== conversationId) {
       setConversationId(propConversationId || null);
-      setMessages(initialMessages || []);
-      lastSyncedConvId.current = propConversationId;
     }
-  }, [propConversationId, initialMessages]);
 
-  useEffect(() => {
-    // Determine if we should perform a full synchronization from properties.
-    // We skip sync if we are currently loading/streaming to prevent overwriting the active response.
-    // We also skip if initialConvId is null (as this indicates a new thread interaction).
-    const isChangingThread = propConversationId !== null && propConversationId !== lastSyncedConvId.current;
-    const needsInitialLoading = propConversationId !== null && messages.length === 0 && initialMessages.length > 0;
-    const shouldSync = !isLoading && (isChangingThread || needsInitialLoading);
+    // 2. Determine if we should perform a full synchronization from parent properties
+    const isThreadSwitch = propConversationId !== undefined && propConversationId !== lastSyncedConvId.current;
+    
+    // We only force a sync if:
+    // - There is a genuine thread switch (different ID)
+    // - We are NOT currently processing an active SSE stream
+    // - The parent is NOT still fetching history (isLoadingHistory)
+    // - If we are on a non-null thread, wait until we actually have initialMessages (to prevent clearing during race)
+    const isReadyForSync = isThreadSwitch && !isLoading && !isLoadingHistory;
+    const hasHistoryContent = initialMessages && initialMessages.length > 0;
+    const isNewThreadInitialization = propConversationId === null;
 
-    if (shouldSync) {
+    if (isReadyForSync && (hasHistoryContent || isNewThreadInitialization)) {
+      // Logic for performing the sync from parent initialMessages
       const normalized = initialMessages.map(msg => ({
         ...msg,
         agentSteps: msg.agentSteps || (msg as any).agent_steps,
         citations: msg.citations || (msg as any).citations
       }));
+
       setMessages(normalized);
-      lastSyncedConvId.current = conversationId;
+      lastSyncedConvId.current = propConversationId;
       
-      // Auto-populate the sidebar with relevant data from the newly synced messages
-      const lastAssistant = [...normalized].reverse().find(m => m.role.toLowerCase() === "assistant");
-      if (lastAssistant) {
-        onMessageSelect?.(lastAssistant);
+      // Auto-select the last message for context panels if syncing a populated thread
+      if (normalized.length > 0) {
+        const lastAssistant = [...normalized].reverse().find(m => m.role.toLowerCase() === "assistant");
+        if (lastAssistant) {
+          onMessageSelect?.(lastAssistant);
+        }
       }
     }
-  }, [initialMessages, conversationId, isLoading]);
+  }, [propConversationId, initialMessages, isLoadingHistory, isLoading]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -271,12 +284,22 @@ export function ChatInterface({
           });
         } else if (data.type === "conversation_id") {
           const newId = data.conversation_id;
+          // IMPORTANT: Update local lastSyncedConvId BEFORE triggering parent re-render
+          // This "locks" the current message state to the new ID so the sync effect knows it's the same thread.
+          lastSyncedConvId.current = newId;
           setConversationId(newId);
           onConversationCreated?.(newId);
-          lastSyncedConvId.current = newId;
         } else if (data.type === "completion" || data.type === "done") {
+          // Unified completion handler: capture metrics, citations, AND the final conversation ID
           if (data.citations && data.citations.length > 0) {
              onCitationsUpdate?.(data.citations);
+          }
+          
+          if (data.conversation_id) {
+            const newId = data.conversation_id;
+            lastSyncedConvId.current = newId;
+            setConversationId(newId);
+            onConversationCreated?.(newId);
           }
           
           setMessages((prev) => {
@@ -332,6 +355,48 @@ export function ChatInterface({
       }
     } catch (err) {
       console.error("Failed to submit feedback:", err);
+    }
+  };
+
+  const handleTriggerEval = async (messageId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/evaluation/trigger`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ message_id: messageId })
+      });
+      
+      if (!response.ok) throw new Error("Trigger failed");
+      
+      // Notify the user it started
+      console.log("Deep evaluation triggered for", messageId);
+      
+      // Setup a small polling loop (simplified) to fetch the updated message metrics
+      const pollInterval = setInterval(async () => {
+         const res = await fetch(`${API_BASE_URL}/api/history/messages/${messageId}`, {
+            headers: getAuthHeaders()
+         });
+         if (res.ok) {
+            const data = await res.json();
+            if (data.metrics && (data.metrics.judge_correctness || data.metrics.ragas_context_precision)) {
+               // Update local state
+               setMessages(prev => prev.map(m => m.id === messageId ? { ...m, metrics: data.metrics } : m));
+               // Update parent/sidebar
+               onMetricsUpdate?.(data.metrics);
+               onMessageSelect?.({ ...data, metrics: data.metrics });
+               clearInterval(pollInterval);
+            }
+         }
+      }, 3000);
+      
+      // Safety timeout for polling
+      setTimeout(() => clearInterval(pollInterval), 30000);
+
+    } catch (err) {
+      console.error("Failed to trigger evaluation:", err);
     }
   };
 
@@ -459,7 +524,13 @@ export function ChatInterface({
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto px-4 pt-4 no-scrollbar">
         <div className="mx-auto max-w-3xl space-y-6 pb-20">
-          {messages.length === 0 ? (
+          {isLoadingHistory ? (
+            <div className="flex flex-col items-center justify-center p-20 text-center animate-in fade-in duration-500">
+               <Loader2 className="h-8 w-8 animate-spin text-blue-500/50 mb-4" />
+               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Restoring Context</h3>
+               <p className="text-[10px] text-slate-600 italic mt-1">Retrieving conversational memory from Nexus nodes...</p>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-10 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600/10 border border-blue-500/30 text-blue-500 mb-4 animate-pulse">
                 <Sparkles className="h-6 w-6" />
@@ -484,6 +555,7 @@ export function ChatInterface({
                    document.getElementById(`citation-${id}`)?.scrollIntoView({ behavior: 'smooth' });
                 }}
                 onFeedback={handleFeedback}
+                onTriggerEval={handleTriggerEval}
                 onSelect={() => msg.role === "assistant" && onMessageSelect?.(msg)}
               />
             ))

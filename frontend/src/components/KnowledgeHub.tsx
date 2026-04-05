@@ -33,14 +33,21 @@ import {
 interface KnowledgeHubProps {
   selectedSkills: string[];
   onToggleSkill: (skillId: string) => void;
+  initialTab?: "documents" | "skills";
+  showTabs?: boolean;
 }
 
-export function KnowledgeHub({ selectedSkills, onToggleSkill }: KnowledgeHubProps) {
+export function KnowledgeHub({ selectedSkills, onToggleSkill, initialTab = "documents", showTabs = true }: KnowledgeHubProps) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"documents" | "skills">("documents");
+  const [activeTab, setActiveTab] = useState<"documents" | "skills">(initialTab);
   const [activeTasks, setActiveTasks] = useState<IngestionTask[]>([]);
+
+  // Update activeTab if initialTab changes (to support back/forward or route clicks)
+  React.useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   // Fetch initial active tasks on mount
   React.useEffect(() => {
@@ -148,28 +155,34 @@ export function KnowledgeHub({ selectedSkills, onToggleSkill }: KnowledgeHubProp
       <header className="flex h-20 items-center justify-between border-b border-slate-800/60 bg-slate-900/10 px-8 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <div className="h-10 w-10 rounded-xl bg-blue-600/20 flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/10">
-            <Library className="h-6 w-6 text-blue-400" />
+            {activeTab === "documents" ? <Library className="h-6 w-6 text-blue-400" /> : <Zap className="h-6 w-6 text-amber-400" />}
           </div>
           <div>
-            <h1 className="text-xl font-black text-white italic tracking-tight uppercase">Intelligence Hub</h1>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Capability & Grounding Layer</p>
+            <h1 className="text-xl font-black text-white italic tracking-tight uppercase">
+              {activeTab === "documents" ? "Document Library" : "Skill Hub"}
+            </h1>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">
+              {activeTab === "documents" ? "Research & Grounding" : "Agent Capabilities"}
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
           {/* Tab Selector */}
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-[300px]">
-             <TabsList className="grid w-full grid-cols-2 bg-slate-800/40 border border-slate-700/50 p-1 h-10 rounded-xl">
-               <TabsTrigger value="documents" className="rounded-lg text-[10px] uppercase font-bold tracking-widest data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all">
-                 <Library className="h-3 w-3 mr-2" />
-                 Documents
-               </TabsTrigger>
-               <TabsTrigger value="skills" className="rounded-lg text-[10px] uppercase font-bold tracking-widest data-[state=active]:bg-amber-600 data-[state=active]:text-white transition-all">
-                 <Zap className="h-3 w-3 mr-2" />
-                 Skills
-               </TabsTrigger>
-             </TabsList>
-          </Tabs>
+          {showTabs && (
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-[300px]">
+               <TabsList className="grid w-full grid-cols-2 bg-slate-800/40 border border-slate-700/50 p-1 h-10 rounded-xl">
+                 <TabsTrigger value="documents" className="rounded-lg text-[10px] uppercase font-bold tracking-widest data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all">
+                   <Library className="h-3 w-3 mr-2" />
+                   Documents
+                 </TabsTrigger>
+                 <TabsTrigger value="skills" className="rounded-lg text-[10px] uppercase font-bold tracking-widest data-[state=active]:bg-amber-600 data-[state=active]:text-white transition-all">
+                   <Zap className="h-3 w-3 mr-2" />
+                   Skills
+                 </TabsTrigger>
+               </TabsList>
+            </Tabs>
+          )}
           {/* Search Bar */}
           <div className="relative hidden md:block">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
