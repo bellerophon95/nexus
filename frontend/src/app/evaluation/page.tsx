@@ -16,6 +16,7 @@ import {
   Clock,
   Fingerprint
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/constants";
 import { getAuthHeaders } from "@/lib/auth";
@@ -30,7 +31,7 @@ interface EvalAlert {
   id: string;
   message_id: string;
   metric_name: string;
-  metric_value: number;
+  value: number;
   threshold: number;
   created_at: string;
   messages?: {
@@ -40,6 +41,7 @@ interface EvalAlert {
 }
 
 export default function EvaluationDashboard() {
+  const router = useRouter();
   const [stats, setStats] = useState<EvalStats | null>(null);
   const [alerts, setAlerts] = useState<EvalAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -217,13 +219,20 @@ export default function EvaluationDashboard() {
                             <Badge variant="outline" className="text-[9px] border-rose-500/30 bg-rose-500/10 text-rose-400">Violation</Badge>
                           </div>
                           <p className="text-[10px] text-slate-500 mt-0.5">
-                            Value: <span className="text-rose-400 font-mono">{(alert.metric_value * 100).toFixed(0)}%</span> (Threshold: {alert.threshold * 100}%)
+                            Value: <span className="text-rose-400 font-mono">{(alert.value * 100).toFixed(0)}%</span> (Threshold: {alert.threshold * 100}%)
                           </p>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <span className="text-[9px] font-mono text-slate-600">{new Date(alert.created_at).toLocaleString()}</span>
-                        <button className="text-[9px] font-black uppercase text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                        <button 
+                          onClick={() => {
+                            if (alert.messages?.conversation_id) {
+                              router.push(`/chat?threadId=${alert.messages.conversation_id}`);
+                            }
+                          }}
+                          className="text-[9px] font-black uppercase text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
+                        >
                           View Turn <ArrowUpRight className="h-2 w-2" />
                         </button>
                       </div>

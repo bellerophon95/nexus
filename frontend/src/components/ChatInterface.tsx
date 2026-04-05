@@ -476,12 +476,12 @@ export function ChatInterface({
                 <button 
                   onClick={() => setRerank(!rerank)}
                   className={cn(
-                    "relative h-5 w-10 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none",
-                    rerank ? "bg-blue-600" : "bg-slate-700"
+                    "relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none ring-offset-slate-950 focus:ring-2 focus:ring-blue-500/40",
+                    rerank ? "bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.4)]" : "bg-slate-700"
                   )}
                 >
                   <span className={cn(
-                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                    "pointer-events-none block h-3 w-3 transform rounded-full bg-white shadow-sm ring-0 transition duration-300 ease-in-out",
                     rerank ? "translate-x-5" : "translate-x-1"
                   )} />
                 </button>

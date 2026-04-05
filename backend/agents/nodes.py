@@ -21,20 +21,23 @@ async def supervisor_node(state: NexusState) -> dict[str, Any]:
     """
     Acts as the orchestrator, deciding which agent to call next.
     """
-    # 1. Termination: If we already have a final answer, end the flow.
-    if state.get("final_answer"):
-        logger.info("Final answer present. Terminating graph.")
+    # 1. Termination: If we already have an approved answer, end the flow.
+    if state.get("final_answer") and state.get("validation_status") == "approved":
+        logger.info("Approved final answer present. Terminating graph.")
         return {"current_agent": "end"}
 
     # 2. Catch simple greetings/out-of-scope early to avoid search loops
-    query = state.get("query", "").lower()
-    greetings = ["hi", "hello", "howdy", "hey", "who are you", "what is this", "howdie"]
+    query = state.get("query", "").strip().lower()
+    # Greetings must be a very specific set of short, isolated words
+    # We removed 'what is this' and 'who are you' as they can be part of research queries.
+    simple_greetings = {"hi", "hello", "howdy", "hey", "howdie"}
+
     if (
-        any(g in query for g in greetings)
+        query in simple_greetings
         and not state["retrieved_chunks"]
         and state["iteration_count"] == 0
     ):
-        logger.info(f"Detected greeting/general query: '{query}'. Routing to analyst.")
+        logger.info(f"Detected simple greeting: '{query}'. Routing to analyst.")
         return {"current_agent": "analyst", "is_greeting": True}
 
     # 3. Check for hard stop (Max iterations or no progress after multiple searches)
@@ -134,16 +137,36 @@ async def researcher_node(state: NexusState) -> dict[str, Any]:
                 # Inject user_id and Tune Engine settings from state into the tool call arguments
                 args = dict(tool_call["args"])
                 args["user_id"] = state.get("user_id")
-                args["match_threshold"] = state.get("match_threshold", 0.2)
+                # Force state usage, default to 0.4 if missing (never 0.2)
+                args["match_threshold"] = state.get("match_threshold", 0.4)
                 args["rerank"] = state.get("rerank", True)
-                results = vector_search.invoke(args)
-                if isinstance(results, list):
-                    # Filter out error dicts
-                    valid_results = [r for r in results if "error" not in r]
+                logger.info(
+                    f"Researcher invoking vector_search with threshold: {args['match_threshold']}"
+                )
+                search_data = vector_search.invoke(args)
+
+                if isinstance(search_data, dict):
+                    valid_results = search_data.get("results", [])
+                    meta = search_data.get("meta", {})
                     new_chunks.extend(valid_results)
+
                     if valid_results:
-                        status_msg = f"Researcher gathered {len(valid_results)} new chunks from the knowledge base."
-                        rationale = f"Semantic search for '{args.get('query')}' yielded relevant document segments."
+                        # Construct a dynamic, transparent status message
+                        techniques = []
+                        if meta.get("hybrid_boost"):
+                            techniques.append("Hybrid-Boosted Sparse Search")
+                        if meta.get("reranked"):
+                            techniques.append("Cohere Reranking")
+                        tech_str = " via " + " & ".join(techniques) if techniques else ""
+
+                        status_msg = (
+                            f"Researcher gathered {len(valid_results)} optimized chunks{tech_str}."
+                        )
+                        rationale = f"Advanced retrieval engaged for '{args.get('query')}'. "
+                        if meta.get("hybrid_boost"):
+                            rationale += "Exact token matching (Sparse) prioritized rare keywords. "
+                        if meta.get("reranked"):
+                            rationale += "Cross-encoder reranking finalized relevance sorting."
                     else:
                         # Diagnostic Check: Does the user even have documents?
                         from backend.database.supabase import get_supabase
@@ -233,17 +256,28 @@ async def analyst_node(state: NexusState) -> dict[str, Any]:
             ],
         }
 
+    # Sort retrieved chunks by score to ensure top (possibly boosted) hits are first in context
+    sorted_chunks = sorted(state["retrieved_chunks"], key=lambda x: x.get("score", 0), reverse=True)
+
     context_text = "\n".join(
         [
-            f"Source: {c['metadata'].get('source_path', 'Unknown')}\n{c['text']}"
-            for c in state["retrieved_chunks"]
+            f"Source: {c['metadata'].get('source_path', 'Unknown')} (Relevance: {c.get('score', 0):.2f})\n{c['text']}"
+            for c in sorted_chunks
         ]
     )
 
     system_prompt = (
         "You are the Lead Analyst for Project Nexus. Synthesize the provided context into "
-        "a clear, professional response. Cite sources where possible. "
-        "If context is insufficient, explain what is missing."
+        "a professional response. "
+        "STRICT RULE: You MUST ONLY use the provided Context to answer. Do NOT use outside knowledge. "
+        "If the information requested is not present in the context, clearly state that "
+        "it is not in the documents.\n\n"
+        "NOTE: Context segments are sorted by retrieval relevance score. Prioritize higher-scoring segments as they have "
+        "been validated by the Hybrid Search engine. Important entities (like organization names, 'mymailkeeper', etc.) "
+        "may be found within email addresses or system IDs—extract them carefully.\n\n"
+        "HELPFULNESS RULE: If a keyword is found as an affiliation, domain, or part of an ID but not fully defined, "
+        "report exactly what is known about it from that context (e.g., 'is mentioned as a domain in an email') "
+        "instead of saying you have no information."
     )
 
     user_prompt = f"Context:\n{context_text}\n\nQuestion: {state['query']}"
@@ -251,17 +285,42 @@ async def analyst_node(state: NexusState) -> dict[str, Any]:
     if state["validation_status"] == "rejected":
         user_prompt += f"\n\nPREVIOUS FEEDBACK: {state['messages'][-1].content}\nPlease correct the errors mentioned."
 
-    response = llm.invoke([SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)])
+    # Use structured output to get internal reasoning for the rationale field
+    # We define the schema inline for simplicity
+    from pydantic import BaseModel, Field
+
+    class AnalystResponse(BaseModel):
+        reasoning: str = Field(
+            description="Step-by-step reasoning on how to answer based on context."
+        )
+        answer: str = Field(description="The final synthesized answer based STRICTLY on context.")
+
+    structured_llm = llm.with_structured_output(AnalystResponse)
+
+    try:
+        response = structured_llm.invoke(
+            [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        )
+        final_answer = response.answer
+        internal_reasoning = response.reasoning
+    except Exception as e:
+        logger.error(f"Structured synthesis failed: {e}")
+        # Fallback to standard invoke if structured fails
+        raw_response = llm.invoke(
+            [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        )
+        final_answer = raw_response.content
+        internal_reasoning = "Synthesized response using available context (Standard Mode)."
 
     return {
-        "final_answer": response.content,
+        "final_answer": final_answer,
         "iteration_count": state["iteration_count"] + 1,
-        "current_agent": "supervisor",
+        "current_agent": "validator",
         "activity_log": [
             {
                 "node": "analyst",
                 "status": "Drafted synthesized response.",
-                "rationale": "Synthesizing available knowledge base context to answer the user's specific query.",
+                "rationale": internal_reasoning,
             }
         ],
     }
@@ -295,7 +354,7 @@ async def validator_node(state: NexusState) -> dict[str, Any]:
         "validation_status": status,
         "hallucination_score": score,
         "messages": [AIMessage(content=f"Validator feedback: {feedback}")],
-        "current_agent": "supervisor",
+        "current_agent": "end" if passed else "supervisor",
         "activity_log": [
             {
                 "node": "validator",

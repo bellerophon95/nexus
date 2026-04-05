@@ -65,7 +65,9 @@ def search_knowledge_base(
                         ]
                     )
 
-                logger.info(f"Searching Qdrant with filter: {filter_obj}")
+                logger.info(
+                    f"Searching Qdrant with filter: {filter_obj} and threshold: {match_threshold}"
+                )
 
                 # Use the most modern 'query_points' if available, otherwise fallback to 'search'
                 if hasattr(client, "query_points"):
@@ -74,6 +76,7 @@ def search_knowledge_base(
                         query=query_embedding,
                         query_filter=filter_obj,
                         limit=match_count,
+                        score_threshold=match_threshold,
                         with_payload=True,
                     ).points
                 else:
@@ -82,6 +85,7 @@ def search_knowledge_base(
                         query_vector=query_embedding,
                         query_filter=filter_obj,
                         limit=match_count,
+                        score_threshold=match_threshold,
                         with_payload=True,
                     )
 
@@ -91,7 +95,7 @@ def search_knowledge_base(
                         {
                             "id": str(hit.id),
                             "text": payload.get("text"),
-                            "score": hit.score,
+                            "score": float(hit.score),
                             "document_id": payload.get("document_id"),
                             "metadata": payload,
                             "title": payload.get("title", "Unknown"),
@@ -127,6 +131,7 @@ def search_knowledge_base(
                     for row in response.data:
                         metadata = row.get("metadata", {})
                         row["title"] = metadata.get("title", "Unknown")
+                        row["score"] = float(row.get("score") or 0.0)
                         initial_results.append(row)
                 logger.info(
                     f"Retrieved {len(initial_results)} results from Supabase hybrid search (user_id: {user_id})."
@@ -134,38 +139,52 @@ def search_knowledge_base(
             except Exception as se:
                 logger.error(f"Supabase RPC search failed: {se}")
 
-        # 4. Final Guest Fallback (Grounding Persistence)
-        if not initial_results and not user_id:
-            logger.warning("No matches found for guest query. Attempting broad shared search.")
-            try:
-                broad_response = (
-                    get_supabase()
-                    .table("chunks")
-                    .select("id, text, metadata")
-                    .eq("is_personal", False)
-                    .limit(limit)
-                    .execute()
-                )
-                if broad_response.data:
-                    for row in broad_response.data:
-                        row["score"] = 0.5  # Artificial score for fallback
-                        row["title"] = row.get("metadata", {}).get("title", "Unknown")
-                        initial_results.append(row)
-                logger.info(
-                    f"Retrieved {len(initial_results)} results from Broad Shared Search fallback."
-                )
-            except Exception as be:
-                logger.error(f"Broad search fallback failed: {be}")
+        # 4. Final Processing & Scores
+        if not initial_results:
+            return {"chunks": [], "meta": {"hybrid_boost": False, "reranked": False}}
 
-        # 5. Optional Reranking
-        if rerank and initial_results:
+        hybrid_boost_triggered = False
+        # Ensure similarity_score is preserved for fusion
+        for hit in initial_results:
+            hit["similarity_score"] = float(hit.get("score") or 0.0)
+
+        # 5. Semantic Keyword Boost (The "mymailkeeper" fix)
+        # If the query contains rare/unique tokens, we perform an exact string match
+        # over the candidates to ensure high-value keywords aren't buried.
+        query_parts = query.lower().split()
+        for hit in initial_results:
+            text = hit.get("text", "").lower()
+            for part in query_parts:
+                # Heuristic for rare tokens: length > 4
+                if len(part) > 4 and part in text:
+                    # Elevate the base score for the reranker to observe
+                    hit["similarity_score"] = max(hit["similarity_score"], 0.95)
+                    hybrid_boost_triggered = True
+
+        # 6. Optional Reranking (Cross-Encoder)
+        if rerank:
             final_results = rerank_results(query, initial_results, top_k=limit)
             logger.info(f"Reranked results to top {len(final_results)}.")
         else:
             final_results = initial_results[:limit]
 
-        return final_results
+        # Ensure every final chunk has a 'match_score' for the UI
+        for chunk in final_results:
+            # SHIELD BOOSTED SCORES: Use the max of rerank and similarity to ensure
+            # manual keyword boosts (0.95) aren't buried by a semantic reranker.
+            chunk["match_score"] = float(
+                max(chunk.get("rerank_score", 0.0), chunk.get("similarity_score", 0.0))
+            )
+
+        return {
+            "chunks": final_results,
+            "meta": {
+                "hybrid_boost": hybrid_boost_triggered,
+                "reranked": rerank,
+                "count": len(final_results),
+            },
+        }
 
     except Exception as e:
-        logger.error(f"Search failed: {e}")
-        return []
+        logger.error(f"Error in search_knowledge_base: {e}")
+        return {"chunks": [], "meta": {"hybrid_boost": False, "reranked": False}}

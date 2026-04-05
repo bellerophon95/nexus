@@ -20,37 +20,37 @@ def build_nexus_graph():
     workflow.add_node("analyst", analyst_node)
     workflow.add_node("validator", validator_node)
 
-    # 2. Add Edges based on Supervisor choice
+    # 2. Routing Logic
     def route_supervisor(state: NexusState):
-        """
-        Conditional logic for routing from the supervisor.
-        """
         agent = state.get("current_agent", "end")
-
-        if agent == "researcher":
-            return "researcher"
-        if agent == "analyst":
-            return "analyst"
-        if agent == "validator":
-            return "validator"
-
+        if agent in ["researcher", "analyst", "validator"]:
+            return agent
         return "end"
 
+    def route_validator(state: NexusState):
+        agent = state.get("current_agent", "end")
+        if agent == "end":
+            return END
+        return "supervisor"
+
+    # 3. Add Edges
     workflow.add_conditional_edges(
         "supervisor",
         route_supervisor,
         {"researcher": "researcher", "analyst": "analyst", "validator": "validator", "end": END},
     )
 
-    # All nodes except validator loop back to supervisor to check next step
     workflow.add_edge("researcher", "supervisor")
-    workflow.add_edge("analyst", "supervisor")
-    workflow.add_edge("validator", "supervisor")
+    workflow.add_edge("analyst", "validator")  # Direct hand-off for speed
 
-    # 3. Set Entry Point
+    workflow.add_conditional_edges(
+        "validator", route_validator, {"supervisor": "supervisor", END: END}
+    )
+
+    # 4. Set Entry Point
     workflow.set_entry_point("supervisor")
 
-    # 4. Compile
+    # 5. Compile
     return workflow.compile()
 
 

@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, BookOpen, Tag } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface CitationCardProps {
   id: number;
@@ -14,12 +15,21 @@ interface CitationCardProps {
   header?: string;
   text: string;
   metadata?: any;
+  score?: number;
 }
 
-export function CitationCard({ id, title, header, text, metadata }: CitationCardProps) {
+export function CitationCard({ id, title, header, text, metadata, score }: CitationCardProps) {
   // Use official title first, fall back to doc_type or 'Document'
   const displayTitle = title || metadata?.title || metadata?.doc_type || "Document";
   const topic = metadata?.topics?.[0] || "General";
+
+  // Score badge coloring
+  const scorePct = Math.round((score || 0) * 100);
+  const getScoreColor = (val: number) => {
+    if (val >= 85) return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+    if (val >= 40) return "text-blue-400 bg-blue-500/10 border-blue-500/20";
+    return "text-amber-400 bg-amber-500/10 border-amber-500/20";
+  };
 
   return (
     <Card className="mb-4 overflow-hidden border-slate-700 bg-slate-900/50 backdrop-blur-md transition-all hover:bg-slate-900/80 group">
@@ -30,6 +40,11 @@ export function CitationCard({ id, title, header, text, metadata }: CitationCard
               <BookOpen className="h-3 w-3" />
               Source {id}
             </Badge>
+            {score !== undefined && (
+              <Badge variant="outline" className={cn("text-[10px] font-bold tracking-tight", getScoreColor(scorePct))}>
+                {scorePct}% match
+              </Badge>
+            )}
           </div>
           <Badge variant="secondary" className="text-[10px] uppercase tracking-wider bg-slate-800 text-slate-400 border-none">
             {topic}

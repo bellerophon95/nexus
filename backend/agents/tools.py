@@ -13,7 +13,7 @@ def vector_search(
     query: str,
     user_id: str | None = None,
     limit: int = 5,
-    match_threshold: float = 0.2,
+    match_threshold: float = 0.4,
     rerank: bool = True,
 ) -> list[dict[str, Any]]:
     """
@@ -26,13 +26,16 @@ def vector_search(
             f"Executing vector search for query: {query} (user_id: {user_id}, threshold: {match_threshold}, rerank: {rerank})"
         )
         # Use our existing hybrid search + reranking pipeline
-        results = search_knowledge_base(
+        response = search_knowledge_base(
             query=query,
             user_id=user_id,
             limit=limit,
             rerank=rerank,
             match_threshold=match_threshold,
         )
+
+        results = response.get("chunks", [])
+        meta = response.get("meta", {})
 
         # Format results for the agent
         formatted_results = []
@@ -41,11 +44,11 @@ def vector_search(
                 {
                     "text": res.get("text", ""),
                     "metadata": res.get("metadata", {}),
-                    "score": res.get("rerank_score") or res.get("similarity", 0.0),
+                    "match_score": res.get("match_score", 0.0),  # Unified Hybrid Score
                 }
             )
 
-        return formatted_results
+        return {"results": formatted_results, "meta": meta}
     except Exception as e:
         logger.error(f"Vector search tool failed: {e}")
         return [{"error": str(e)}]

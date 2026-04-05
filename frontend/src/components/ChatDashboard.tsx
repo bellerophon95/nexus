@@ -192,6 +192,7 @@ export function ChatDashboard({ initialConversationId = null }: ChatDashboardPro
                           header={cit.header} 
                           text={cit.text} 
                           metadata={cit.metadata}
+                          score={cit.score}
                         />
                      </div>
                    ))

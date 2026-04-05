@@ -39,6 +39,10 @@ async def query_streaming(
     """
 
     start_time = time.perf_counter()
+    logger.info(
+        f"Incoming Query: '{q}' | Threshold: {match_threshold} | Rerank: {rerank} | Iterations: {max_iterations}"
+    )
+
     # Shadow Auth: Sync user registration
     access_tier = request.headers.get("X-Nexus-Access-Tier") or "visitor"
     if user_id:
@@ -213,9 +217,13 @@ async def query_streaming(
 
                     # Yield agent step for UI tracking
                     agent_name = node_name.capitalize()
-                    status_desc = "Working..."
+
+                    # More descriptive default status fallback
+                    default_status = f"Analyzing with {agent_name}..."
+                    status_desc = default_status
+
                     if updates.get("activity_log"):
-                        status_desc = updates["activity_log"][-1].get("status", "Working...")
+                        status_desc = updates["activity_log"][-1].get("status", default_status)
 
                     # Extract rationale if available
                     rationale = (
@@ -223,6 +231,8 @@ async def query_streaming(
                         if updates.get("activity_log")
                         else None
                     )
+
+                    # Mark as completed in the event stream
                     yield await yield_agent_step(agent_name, node_name, "completed", rationale)
                     yield f"data: {json.dumps({'type': 'activity', 'node': node_name, 'status': status_desc, 'status_type': 'completed', 'rationale': rationale})}\n\n"
 
@@ -251,6 +261,7 @@ async def query_streaming(
                                     "title": chunk.get("metadata", {}).get("title", "Unknown"),
                                     "text": chunk.get("text", ""),
                                     "metadata": chunk.get("metadata", {}),
+                                    "score": chunk.get("match_score", 0.0),
                                 }
                             )
                         citations = new_citations

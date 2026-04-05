@@ -89,10 +89,10 @@ async def check_hallucination(answer: str, context_chunks: list[dict[str, Any]])
 
     except Exception as e:
         logger.error(f"Self-RAG validation failed: {e}")
-        # Default to passing if validation itself fails, to avoid blocking the user
+        # Default to FAILURE if validation itself fails, to prevent undetected hallucinations
         return {
-            "passed": True,
-            "hallucination_score": 0.0,
-            "unsupported_claims": [],
-            "reasoning": f"Validation technical error: {e}",
+            "passed": False,
+            "hallucination_score": 1.0,
+            "unsupported_claims": ["Safety engine technical failure"],
+            "reasoning": f"Validation technical error: {e}. Defaulting to unsafe state.",
         }

@@ -59,12 +59,18 @@ class EvaluationManager:
             ragas_results = {}
             if random.random() < sampling_rate:
                 logger.info(f"Sampling Ragas for message {message_id}")
-                ragas_results = await run_ragas_eval_async(
+                ragas_data = await run_ragas_eval_async(
                     query=question, answer=answer, contexts=contexts, trace_id=trace_id
                 )
-                if ragas_results:
+                if ragas_data:
+                    ragas_results = ragas_data.get("scores", {})
+                    ragas_reasoning = ragas_data.get("reasoning", "Scientific analysis complete.")
+
                     await save_evaluation_log(
-                        message_id=message_id, evaluator="ragas", scores=ragas_results
+                        message_id=message_id,
+                        evaluator="ragas",
+                        scores=ragas_results,
+                        reasoning=ragas_reasoning,
                     )
 
             # 3. Update Message Metrics in DB
